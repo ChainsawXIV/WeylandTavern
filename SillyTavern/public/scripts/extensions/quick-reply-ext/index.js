@@ -2087,6 +2087,18 @@ async function BG(charMessage, charName) {
     }
 }
 
+/**
+ * The loose "Name + verb" detection must only read narration. A name inside spoken dialogue
+ * ("Because Bianca described you...") is usually someone being talked about, not someone in the
+ * scene, and it was swapping the main sprite to them. Same-line quotes only, so a stray unmatched
+ * quote can't blank out the rest of the message.
+ * @param {string} text
+ * @returns {string}
+ */
+function withoutQuotedDialogue(text) {
+    return String(text ?? '').replace(/"[^"\n]*"|“[^”\n]*”/g, ' ');
+}
+
 /** 
  * @param {string} [charName]
  * @param {import("./src/chat.js").ChatMessage} [charMessage]
@@ -2111,7 +2123,7 @@ async function OpenWorldCostumes(charName, charMessage) {
             )];
         if (foundCharacters.length < 2) {
             foundCharacters.push(...new Set(
-                [...charMessage.mes.matchAll(altRegex)]
+                [...withoutQuotedDialogue(charMessage.mes).matchAll(altRegex)]
                     .map(m => aliasLookup.get(m[1]) ?? m[1])
                     .filter(name => charactersWithExpressions.includes(name) && !foundCharacters.includes(name))
             ));
@@ -2218,7 +2230,7 @@ async function GroupCostumes(charName, charMessage) {
             )];
         if (foundCharacters.length < 2) {
             foundCharacters.push(...new Set(
-                [...charMessage.mes.matchAll(altRegex)]
+                [...withoutQuotedDialogue(charMessage.mes).matchAll(altRegex)]
                     .map(m => aliasLookup.get(m[1]) ?? m[1])
                     .filter(name => charactersWithExpressions.includes(name) && !foundCharacters.includes(name))
             ));

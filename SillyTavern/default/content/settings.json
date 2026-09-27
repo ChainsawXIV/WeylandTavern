@@ -522,7 +522,8 @@
             "custom": [],
             "fallback_expression": "neutral",
             "talkinghead": true,
-            "allowMultiple": true
+            "allowMultiple": true,
+            "rerollIfSame": true
         },
         "connectionManager": {
             "selectedProfile": "d61834c1-ff9b-4bf8-a161-daeadab2716a",

@@ -1,9 +1,10 @@
 import express from 'express';
 import { getCatalog, publicItem } from '../registrar/catalog.js';
 import { readLibrary, librarySummary, saveLibraryChange } from '../registrar/library.js';
+import { startExpressionSync, expressionSyncStatus } from '../registrar/expressions.js';
 
 /** Mounted with the existing private, CSRF-protected SillyTavern API routes. */
-export function createRegistrarRouter(catalogProvider = getCatalog) {
+export function createRegistrarRouter(catalogProvider = getCatalog, syncExpressions = startExpressionSync) {
     const router = express.Router();
     router.get('/catalog', async (_request, response) => {
         try {
@@ -20,6 +21,16 @@ export function createRegistrarRouter(catalogProvider = getCatalog) {
         try { response.json(librarySummary(await readLibrary(request.user.directories))); }
         catch (error) { response.status(409).json({ error: error.message }); }
     });
+    router.get('/expressions/status', (request, response) => {
+        response.json(expressionSyncStatus(request.user.directories));
+    });
+    // Re-checks sprites without changing lore (the app's "Scan for updates"): fetches only missing or
+    // changed images, so it is cheap when everything is current, and it backfills imports made
+    // before sprites were downloaded.
+    router.post('/expressions/sync', (request, response) => {
+        syncExpressions(request.user.directories);
+        response.json(expressionSyncStatus(request.user.directories));
+    });
     router.post('/library', async (request, response) => {
         const { action, key, startPaused } = request.body || {};
         const keyPattern = ['activate', 'deactivate'].includes(action) ? /^(character|location):\d+$/ : /^(character|location|collection):\d+$/;
@@ -29,6 +40,8 @@ export function createRegistrarRouter(catalogProvider = getCatalog) {
         try {
             const catalog = action === 'install' ? await catalogProvider() : [];
             const book = await saveLibraryChange(request.user.directories, action, key, catalog, { startPaused: Boolean(startPaused) });
+            // Sprites download in the background (see registrar/expressions.js); the lore is usable now.
+            syncExpressions(request.user.directories);
             response.json(librarySummary(book));
         } catch (error) { response.status(409).json({ error: error.message }); }
     });

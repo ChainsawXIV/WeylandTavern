@@ -78,7 +78,7 @@ async function getSpritesList(name) {
 }
 //#endregion
 
-const findImage = async (character, expression) => {
+const findImage = async (character, expression, currentPath = null) => {
     // Match against the folder's sprite list like ST's expressions extension does.
     // The server lowercases labels, so file names match case-insensitively on every OS.
     const spriteList = await getSpritesList(character);
@@ -89,7 +89,13 @@ const findImage = async (character, expression) => {
             if (label !== expression) {
                 console.log(`${CONSOLE_PREFIX} Expression '${expression}' not found, using neutral`);
             }
-            return images[Math.floor(Math.random() * images.length)].filePath;
+            // Same as ST's "Re-roll if same sprite": don't pick the variant that's already showing
+            let pool = images;
+            if (extension_settings.expressions?.rerollIfSame && currentPath) {
+                const others = images.filter(img => img.filePath !== currentPath);
+                if (others.length) pool = others;
+            }
+            return pool[Math.floor(Math.random() * pool.length)].filePath;
         }
     }
 
@@ -116,6 +122,7 @@ export const updateSideCharacter = async (/** @type {{ clear?: string; character
     
     // Remove old style
     const oldStyle = document.getElementById(STYLE_ID);
+    const currentPath = oldStyle?.textContent?.match(/background-image:\s*url\(\s*["']?([^"')]+)["']?\s*\)/i)?.[1] ?? null;
     if (oldStyle) oldStyle.remove();
     
     // If clearing, just remove and return
@@ -169,7 +176,7 @@ export const updateSideCharacter = async (/** @type {{ clear?: string; character
     const height = args.height || defaultHeight;
 
     // Find the image
-    const imagePath = await findImage(character, expression);
+    const imagePath = await findImage(character, expression, currentPath);
     
     // If no image found, don't inject CSS
     if (!imagePath) {

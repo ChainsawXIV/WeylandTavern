@@ -539,7 +539,7 @@ const registrarApp = createHostedRegistrar(() => {
     // Invalidate even when the managed book name is unchanged after an update/removal.
     contactLorebookState.signature = '';
     contactLorebookState.ready = false;
-});
+}, () => queueWeyPhoneSave());
 
 function contactLorebookSignature() {
     const settings = getSettings(SillyTavern.getContext().extensionSettings);

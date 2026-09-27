@@ -11,7 +11,22 @@ export function createRegistrarApp(host) {
     let searchTimer;
     state.pendingUpdates = [];
     state.updatingAll = false;
+    state.expressionStatus = null;
+    let expressionTimer = null;
     const alive = () => container && root && container.contains(root);
+    // Imports return once the lore is saved; the server keeps downloading sprites in the background.
+    // Poll only while a download runs and only while the app is on screen (mount() resumes it).
+    async function pollExpressions(route = '/expressions/status', body = undefined) {
+        clearTimeout(expressionTimer);
+        expressionTimer = null;
+        let status;
+        try { status = await host.request(route, body); } catch { return; }
+        if (!status || typeof status.running !== 'boolean') return;
+        if (status.running) state.expressionWatched = true;
+        state.expressionStatus = status;
+        draw();
+        if (status.running && alive()) expressionTimer = setTimeout(() => void pollExpressions(), 1500);
+    }
     function draw(resetScroll = false) {
         if (!alive()) return;
         const top = container.scrollTop;
@@ -48,6 +63,7 @@ export function createRegistrarApp(host) {
         if (library.status === 'fulfilled') { state.library = library.value; state.active = host.isActive(library.value.bookName); }
         state.error = results.filter(result => result.status === 'rejected').map(result => result.reason.message).join(' ');
         state.loading = false; draw();
+        void pollExpressions();
     }
     async function mutate(action, key, options = {}) {
         if (state.busy) return;
@@ -69,6 +85,7 @@ export function createRegistrarApp(host) {
             }[action];
         } catch (error) { state.error = error.message; }
         finally { state.busy = false; draw(); }
+        if (!state.error) void pollExpressions();
     }
     async function scanForUpdates() {
         if (state.busy || state.loading) return;
@@ -77,11 +94,17 @@ export function createRegistrarApp(host) {
         await load();
         if (state.error) { state.scanResult = 'Could not reach the Registrar. Try again shortly.'; draw(); return; }
         const catalogByKey = new Map(state.items.map(row => [row.key, row]));
+        const libraryByKey = new Map((state.library?.items ?? []).map(row => [row.key, row]));
+        // New or replaced sprites count as an update even if the Registrar kept the same updatedAt.
+        const expressionsChanged = source => (source.members?.length ? source.members : [source.key]).some(key => {
+            const fresh = catalogByKey.get(key), local = libraryByKey.get(key);
+            return Boolean(fresh?.expressionsKey && local && fresh.expressionsKey !== local.expressionsKey);
+        });
         let updated = 0, missing = 0;
         for (const source of state.library?.sources ?? []) {
             const fresh = catalogByKey.get(source.key);
             if (!fresh) { missing++; continue; }
-            if (fresh.updatedAt && source.updatedAt && Date.parse(fresh.updatedAt) > Date.parse(source.updatedAt)) {
+            if ((fresh.updatedAt && source.updatedAt && Date.parse(fresh.updatedAt) > Date.parse(source.updatedAt)) || expressionsChanged(source)) {
                 updated++;
                 state.pendingUpdates.push({ key: source.key, name: fresh.name || source.name });
             }
@@ -92,6 +115,9 @@ export function createRegistrarApp(host) {
                 ? `Catalog refreshed. ${missing} import${missing === 1 ? '' : 's'} no longer public — still kept in your world.`
                 : 'Everything is up to date.';
         draw();
+        // Also re-check sprites on disk: fills in anything missing, e.g. imports made before
+        // sprites were downloaded, without touching any lore.
+        void pollExpressions('/expressions/sync', {});
     }
     async function updateAll() {
         if (state.busy || state.loading || !state.pendingUpdates.length) return;
@@ -119,6 +145,7 @@ export function createRegistrarApp(host) {
                 : `All ${completed} update${completed === 1 ? '' : 's'} downloaded and applied.`;
             state.error = failures.join(' ');
         } finally { state.busy = false; state.updatingAll = false; draw(); }
+        void pollExpressions();
     }
     function bind() {
         root.querySelector('.rg-browse-filters')?.addEventListener('toggle', event => { state.filtersOpen = event.target.open; });
@@ -156,6 +183,12 @@ export function createRegistrarApp(host) {
                     state.browseFilters = normalizeRegistrarFilters(); state.filterSearch = {}; state.page = 0;
                     host.setBrowseFilters?.(state.browseFilters); draw(); break;
                 case 'updateAll': await updateAll(); break;
+                case 'toggleExpressions': {
+                    const filters = normalizeRegistrarFilters(state.browseFilters);
+                    filters.onlyExpressions = !filters.onlyExpressions;
+                    state.browseFilters = filters; state.page = 0;
+                    host.setBrowseFilters?.(filters); draw(true); break;
+                }
                 case 'active':
                     if (state.busy) break;
                     try { await host.setActive(state.library.bookName, !state.active); state.active = host.isActive(state.library.bookName); }
@@ -229,6 +262,7 @@ export function createRegistrarApp(host) {
             renderRegistrar(container, state); root = container.firstElementChild; bind();
             if (!state.loading && !state.busy && Date.now() - lastLoad > 60_000) void load();
             else if (state.library) { state.active = host.isActive(state.library.bookName); draw(); }
+            if (state.expressionStatus?.running) void pollExpressions();
         },
         back() {
             if (state.confirm) { state.confirm = null; draw(); return true; }

@@ -1,7 +1,11 @@
 export const FILTER_FIELDS = ['gender', 'species', 'tags'];
 export const filterValue = value => typeof value === 'string' ? value.trim().toLowerCase() : '';
+// onlyExpressions is the one "show only" filter; the label fields above all hide matches.
 export function normalizeRegistrarFilters(value = {}) {
-    return Object.fromEntries(FILTER_FIELDS.map(field => [field, [...new Set((Array.isArray(value?.[field]) ? value[field] : []).map(filterValue).filter(Boolean))]]));
+    return {
+        ...Object.fromEntries(FILTER_FIELDS.map(field => [field, [...new Set((Array.isArray(value?.[field]) ? value[field] : []).map(filterValue).filter(Boolean))]])),
+        onlyExpressions: value?.onlyExpressions === true,
+    };
 }
 export function registrarFilterOptions(items, filters) {
     return Object.fromEntries(FILTER_FIELDS.map(field => {
@@ -19,6 +23,7 @@ export function registrarFilterOptions(items, filters) {
 export function hiddenByRegistrarFilters(item, filters) {
     if (item.kind !== 'character') return false;
     const normalized = normalizeRegistrarFilters(filters);
+    if (normalized.onlyExpressions && !(Number(item.expressions) > 0)) return true;
     return FILTER_FIELDS.some(field => (field === 'tags' ? (Array.isArray(item.tags) ? item.tags : []) : [item[field]])
         .some(value => normalized[field].includes(filterValue(value))));
 }

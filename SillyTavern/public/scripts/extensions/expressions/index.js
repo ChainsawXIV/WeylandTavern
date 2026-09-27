@@ -2148,6 +2148,13 @@ function migrateSettings() {
         saveSettingsDebounced();
     }
 
+    // Weyland: default re-roll ON so alt sprites (anger.png / anger-2.png) visibly alternate instead of a
+    // random pick repeating the same file. Only when unset, so a user who turned it off keeps that choice.
+    if (extension_settings.expressions.rerollIfSame === undefined) {
+        extension_settings.expressions.rerollIfSame = true;
+        saveSettingsDebounced();
+    }
+
     if (extension_settings.expressions.showDefault && extension_settings.expressions.fallback_expression) {
         extension_settings.expressions.showDefault = false;
         saveSettingsDebounced();

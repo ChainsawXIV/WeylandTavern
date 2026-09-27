@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { createHash } from 'node:crypto';
 
 const ROOT = 'https://registrar.weybooru.com';
 const ROUTES = { character: 'data', location: 'loci', collection: 'coll' };
@@ -107,6 +108,16 @@ export function collectionMembers(collection, catalog) {
     });
 }
 
+/**
+ * Fingerprint of a character's three expression lists. Lets the app's update scan notice changed
+ * sprites even when the Registrar did not move the character's updatedAt.
+ */
+export function expressionsKey(item) {
+    if (item.kind !== 'character') return '';
+    const lists = ['expressionsClothed', 'expressionsUnderwear', 'expressionsNude'].map(field => JSON.stringify(parseList(item[field])));
+    return createHash('sha1').update(lists.join('|')).digest('hex').slice(0, 16);
+}
+
 export function publicItem(item, catalog = []) {
     const members = item.kind === 'collection' ? collectionMembers(item, catalog).map(itemKey) : undefined;
     return {
@@ -116,6 +127,9 @@ export function publicItem(item, catalog = []) {
         summary: item.summary || '', owner: item.ownerName || '', portrait: item.portrait || '',
         updatedAt: item.updatedAt, tokens: Number(item.tokens) || 0, tags: parseList(item.tags),
         species: item.species || '', major: item.major || '', age: item.baseAge || '', members,
+        expressionsKey: expressionsKey(item),
+        // Sprite count across all outfits: drives the app's "Expressions" badge and filter.
+        expressions: item.kind === 'character' ? ['expressionsClothed', 'expressionsUnderwear', 'expressionsNude'].reduce((sum, field) => sum + parseList(item[field]).length, 0) : 0,
         details: item.kind === 'character'
             ? { Personality: item.personality, Appearance: item.appearance, 'Communication style': item.speech, Relationships: item.relationships, Home: item.dwelling }
             : item.kind === 'location' ? { Description: item.description, Denizens: item.denizens, Events: item.events,

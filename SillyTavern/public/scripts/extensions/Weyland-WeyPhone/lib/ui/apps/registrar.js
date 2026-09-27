@@ -13,6 +13,12 @@ function wipBadge(item) {
         ? '<span class="rg-wip-badge" title="Work in progress — this character is still being developed"><i class="fa-solid fa-pencil" aria-hidden="true"></i> WIP <span class="wp-sr-only">— Work in progress</span></span>' : '';
 }
 
+function expressionsBadge(item) {
+    const count = Number(item.expressions) || 0;
+    return item.kind === 'character' && count > 0
+        ? `<span class="rg-expr-badge" title="Has ${count} expression sprites. They download with the import and show when this character speaks in a scene."><i class="fa-solid fa-face-smile" aria-hidden="true"></i> Expressions</span>` : '';
+}
+
 export function safePortrait(value) {
     try {
         const url = new URL(value);
@@ -55,7 +61,7 @@ function card(item, state, index) {
     const paused = state.tab === 'library' && item.active === false;
     const cardButton = `<button type="button" class="rg-card rg-card-${e(item.kind)}${paused ? ' rg-card-paused' : ''}" data-rg-open="${e(item.key)}">
         ${art(item)}<span class="rg-card-copy"><span class="rg-eyebrow">${item.kind === 'collection' ? `${item.members?.length || 0} people & places` : item.kind === 'location' ? 'Around Weyland' : e(item.species || 'Campus character')}${meta ? `<span class="rg-card-meta">${meta}</span>` : ''}</span>
-        <strong>${e(item.name)}</strong>${wipBadge(item)}<span class="rg-summary">${e(item.summary)}</span>
+        <strong>${e(item.name)}</strong>${wipBadge(item)}${expressionsBadge(item)}<span class="rg-summary">${e(item.summary)}</span>
         <span class="rg-card-foot"><span>${paused ? '<b class="rg-stamp">UNLOADED</b>' : installed ? '<b class="rg-stamp">IN YOUR WORLD</b>' : `by ${e(item.owner || 'the community')}`}</span><span aria-hidden="true">↗</span></span></span>
         <span class="rg-index" aria-hidden="true">${String(index + 1).padStart(2, '0')}</span></button>`;
     // Toggling load state is a My World-only control, and only applies to items that get their own
@@ -77,17 +83,29 @@ function detail(item, state) {
         <div class="rg-detail-heading">
             <div class="rg-detail-heading-name"><span class="rg-eyebrow">${e(item.kind)} · No. ${e(item.id)}</span><h2>${e(item.name)}</h2>${item.surname ? `<p class="rg-surname">${e(item.surname)}</p>` : ''}</div>
             <p class="rg-detail-summary">${e(item.summary)}</p>
-            ${wipBadge(item)}${item.kind === 'character' && item.status === 'wip' ? '<p class="rg-wip-note">Work in progress: this character is still being developed. Their details may be incomplete or change in future updates.</p>' : ''}
+            ${wipBadge(item)}${expressionsBadge(item)}${item.kind === 'character' && item.status === 'wip' ? '<p class="rg-wip-note">Work in progress: this character is still being developed. Their details may be incomplete or change in future updates.</p>' : ''}
             <div class="rg-byline">Created by <b>${e(item.owner || 'the community')}</b><br>Updated ${e(date)}</div>
         </div>
         <div class="rg-import-box"><span class="rg-eyebrow">${source ? 'In your world' : 'Not yet imported'}</span>
-        <p>${item.kind === 'character' ? 'Imports their subbot, background and home lore.<br><br>No character card or greeting is created.' : item.kind === 'location' ? 'Imports its lore, denizens and sub-locations.' : `${members.filter(row => row.kind === 'character').length} characters and ${members.filter(row => row.kind === 'location').length} locations, gathered by their curator.<br><br>Shared entries are only imported once.`}</p>
+        <p>${item.kind === 'character' ? 'Imports their subbot, background, home lore and expression sprites.<br><br>No character card or greeting is created.' : item.kind === 'location' ? 'Imports its lore, denizens and sub-locations.' : `${members.filter(row => row.kind === 'character').length} characters and ${members.filter(row => row.kind === 'location').length} locations, gathered by their curator.<br><br>Shared entries are only imported once.`}</p>
         ${included.length && !source ? `<p class="rg-included">Already included through ${included.map(row => e(row.name)).join(', ')}.</p>` : ''}
         <button type="button" class="rg-primary" data-rg-install="${e(item.key)}" ${state.busy || !state.library || !canInstall ? 'disabled' : ''}>${state.busy ? 'Working…' : source ? 'Update this import' : 'Add to my world'} <span aria-hidden="true">↓</span></button>
         ${source ? `<button type="button" class="rg-text-button" data-rg-remove="${e(item.key)}" ${state.busy ? 'disabled' : ''}>Remove this import</button>` : ''}</div>
         ${item.kind === 'collection' ? `<section class="rg-members"><h3>Inside this collection</h3>${members.length ? members.map(row => `<button type="button" data-rg-open="${e(row.key)}"><span>${row.kind === 'location' ? '⌖' : '○'}</span><span>${e(row.name)}<small>${e(row.kind)}</small></span><span>→</span></button>`).join('') : '<p>No public members are available.</p>'}</section>` : Object.entries(item.details || {}).filter(([, value]) => value).map(([title, value]) => `<details class="rg-fold"><summary>${e(title)}</summary><p>${e(value)}</p></details>`).join('')}
         <a class="rg-site-link" href="${e(registrarLink(item))}" target="_blank" rel="noopener noreferrer">View or edit on the Registrar ↗</a>
     </article>`;
+}
+
+// Sprites for imported characters download in the background after the lore is saved. A finished
+// download is only reported to the session that watched it run, so the app doesn't repeat an old
+// "done" line every time it opens.
+export function expressionStatusLine(state) {
+    const s = state.expressionStatus;
+    if (!s || !s.total && !s.failed) return '';
+    if (s.running) return `<p class="rg-notice" role="status">Downloading expressions… ${s.done.toLocaleString()} of ${s.total.toLocaleString()} images</p>`;
+    if (!state.expressionWatched) return '';
+    if (s.failed) return `<p class="rg-notice rg-error" role="alert">Expressions downloaded, but ${s.failed.toLocaleString()} image${s.failed === 1 ? '' : 's'} failed${s.errors?.[0] ? ` (${e(s.errors[0])})` : ''}. Scan for updates to retry.</p>`;
+    return `<p class="rg-notice" role="status">Expressions downloaded (${s.total.toLocaleString()} image${s.total === 1 ? '' : 's'}).</p>`;
 }
 
 function settingsPanel(state) {
@@ -105,6 +123,7 @@ function settingsPanel(state) {
         <button type="button" data-rg-action="clearFilters">Clear all filters</button></details>
         <div class="rg-settings-row"><div><strong>Scan for updates</strong><small>Checks your downloads for newer versions. Scanning does not apply updates.</small></div><button type="button" data-rg-action="scanUpdates" ${state.loading || state.busy ? 'disabled' : ''}>${state.loading ? 'Scanning…' : 'Scan'}</button></div>
         ${state.scanResult ? `<p class="rg-token-note" role="status">${e(state.scanResult)}</p>` : ''}
+        ${expressionStatusLine(state)}
         ${state.error ? `<p class="rg-token-note" role="alert">${e(state.error)}</p>` : ''}
         ${state.pendingUpdates?.length ? `<div class="rg-settings-row"><div><strong>Update your downloads</strong><small>Downloads and applies all updates found by the scan. Loaded and unloaded entries keep their current settings.</small></div><button type="button" data-rg-action="updateAll" ${state.busy || state.loading ? 'disabled' : ''}>${state.updatingAll ? 'Updating…' : 'Update all'}</button></div>` : ''}
         <div class="rg-settings-row"><div><strong>Load new imports automatically</strong><small>Off starts every new import unloaded, so a big collection can't quietly inflate your token cost.</small></div><label class="rg-switch"><input type="checkbox" id="rg-autoload-toggle" ${state.autoActivateNewImports ? 'checked' : ''}><span></span></label></div>
@@ -170,10 +189,11 @@ export function renderRegistrar(container, state) {
         <div class="rg-page">
         ${state.error ? `<div class="rg-notice rg-error" role="alert">${e(state.error)} <button type="button" data-rg-action="refresh">Try again</button></div>` : ''}
         ${state.notice ? `<div class="rg-notice" role="status">${e(state.notice)}</div>` : ''}
+        ${state.settingsOpen ? '' : expressionStatusLine(state)}
         ${item ? detail(item, state) : `
             ${state.tab === 'library' && count ? `<div class="rg-world-switch"><div><strong>${state.active ? 'Registrar Active' : 'Registrar Paused'}</strong><small>${count} people & places · ${state.library.entryCount} lore entries</small></div><button type="button" data-rg-action="tokenCost">Token cost</button><button type="button" data-rg-action="active" ${state.busy ? 'disabled' : ''}>${state.active ? 'Pause' : 'Activate'}</button></div>` : ''}
             <form class="rg-search" role="search"><span aria-hidden="true">⌕</span><input type="search" aria-label="Search Registrar" placeholder="${state.tab === 'location' ? 'Find a place…' : state.tab === 'collection' ? 'Find a collection…' : 'Name, creator, or a little curiosity…'}" value="${e(state.query)}"><button type="submit" aria-label="Search">→</button></form>
-            <div class="rg-list-heading"><span>${state.loading && !state.items.length ? 'Loading catalog…' : `${items.length} ${state.tab === 'library' ? 'imports' : labels[state.tab].toLowerCase()}`}</span><select aria-label="Sort Registrar"><option value="updated" ${state.sort === 'updated' ? 'selected' : ''}>Recently updated</option><option value="name" ${state.sort === 'name' ? 'selected' : ''}>A–Z</option></select></div>
+            <div class="rg-list-heading"><span>${state.loading && !state.items.length ? 'Loading catalog…' : `${items.length} ${state.tab === 'library' ? 'imports' : labels[state.tab].toLowerCase()}`}</span>${state.tab === 'character' ? `<button type="button" class="rg-expr-toggle" data-rg-action="toggleExpressions" aria-pressed="${normalizeRegistrarFilters(state.browseFilters).onlyExpressions}" title="Show only characters with expression sprites"><i class="fa-solid fa-face-smile" aria-hidden="true"></i> With expressions</button>` : ''}<select aria-label="Sort Registrar"><option value="updated" ${state.sort === 'updated' ? 'selected' : ''}>Recently updated</option><option value="name" ${state.sort === 'name' ? 'selected' : ''}>A–Z</option></select></div>
             <div class="rg-cards ${state.tab === 'collection' ? 'rg-collections' : ''}">${items.slice(state.page * 12, state.page * 12 + 12).map((row, index) => card(row, state, state.page * 12 + index)).join('')}</div>
             ${!items.length ? `<div class="rg-empty"><span aria-hidden="true">❧</span><h3>${state.loading ? 'Loading…' : state.query ? 'No matches.' : state.tab === 'library' ? 'Nothing imported yet.' : 'No results.'}</h3><p>${state.loading ? 'Fetching the public Registrar catalog.' : state.query ? 'Try a name, species, creator, or another keyword.' : state.tab === 'library' ? 'Browse Characters, Locations or Collections, then choose Add to my world.' : 'Refresh the catalog to try again.'}</p></div>` : ''}
             ${pages > 1 ? `<div class="rg-pagination"><button type="button" data-rg-action="previous" ${state.page === 0 ? 'disabled' : ''}>← Previous</button><span>${state.page + 1} / ${pages}</span><button type="button" data-rg-action="next" ${state.page >= pages - 1 ? 'disabled' : ''}>Next →</button></div>` : ''}

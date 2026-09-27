@@ -192,7 +192,10 @@ function describeDownloadFailure(error) {
     }
     if (code === 'EBUSY') return 'the file is open in another program';
     if (code === 'ENOSPC') return 'the disk is full';
-    if (/size mismatch/i.test(String(error?.message))) return 'the file arrived incomplete';
+    // Keep the byte counts: they tell a cut-off transfer (short) apart from a different or damaged
+    // copy on the CDN (wrong size every time, possibly larger), which only the numbers reveal.
+    const sizes = String(error?.message).match(/size mismatch.*expected (\d+), received (\d+)/i);
+    if (sizes) return `the file arrived incomplete (expected ${Number(sizes[1]).toLocaleString('en-US')} bytes, got ${Number(sizes[2]).toLocaleString('en-US')})`;
     if (error?.name === 'TypeError' || code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ENOTFOUND') {
         return 'could not reach the download server (check your internet connection)';
     }
@@ -386,6 +389,36 @@ async function downloadWithRetry(url, signal, retryDelayMiliseconds = 1500) {
   // Both attempts failed. Throw the real error (not null) so the terminal can say WHY.
   // null stays reserved for a 404 from fetchFromBunny.
   throw lastError;
+}
+
+/**
+ * Downloads one manifest asset and checks its size, retrying the WHOLE transfer.
+ * downloadWithRetry only covers the request itself: a body that arrives short (connection
+ * dropped mid-file, or a CDN edge holding a truncated cached copy) used to fail at once.
+ * The retry changes the `v` cache key so Bunny pulls a fresh copy instead of re-serving
+ * the same bad bytes from that edge.
+ * @param {string} url - Asset URL already carrying `?v=<version>`
+ * @param {AbortSignal} signal
+ * @param {number | string} expectedVersion
+ * @param {string} assetName
+ * @returns {Promise<{ buffer: Buffer, size: number } | null>} null when the file is not on the server (404)
+ */
+async function downloadAssetWithRetry(url, signal, expectedVersion, assetName) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const attemptUrl = attempt === 0 ? url : url.replace(/([?&]v=[^&]*)/, `$1-r${Date.now()}`);
+        try {
+            const response = await downloadWithRetry(attemptUrl, signal);
+            if (!response) return null;
+            const buffer = Buffer.from(await response.arrayBuffer());
+            const size = validateDownloadedAsset(buffer, expectedVersion, assetName);
+            return { buffer, size };
+        } catch (error) {
+            if (error?.name === 'AbortError' || signal?.aborted) throw error;
+            lastError = error;
+        }
+    }
+    throw lastError;
 }
 
 /**
@@ -975,11 +1008,9 @@ router.post('/download', async (request, response) => {
                 downloadTasks.push(async () => {
                     if (isSkipped(characterName)) return;
                     try {
-                        const response = await downloadWithRetry(url, abortController.signal);
-                        if (!response) throw new Error('Not found on the download server');
-
-                        const buffer = Buffer.from(await response.arrayBuffer());
-                        const downloadedSize = validateDownloadedAsset(buffer, diffChar.version, `${diffChar.name}.png`);
+                        const downloaded = await downloadAssetWithRetry(url, abortController.signal, diffChar.version, `${diffChar.name}.png`);
+                        if (!downloaded) throw new Error('Not found on the download server');
+                        const { buffer, size: downloadedSize } = downloaded;
                         await mkdir(dirname(destPath), { recursive: true });
                         await writeFileClearingReadOnly(destPath, buffer);
 
@@ -1023,11 +1054,9 @@ router.post('/download', async (request, response) => {
                         downloadTasks.push(async () => {
                             if (isSkipped(characterName)) return;
                             try {
-                                const response = await downloadWithRetry(url, abortController.signal);
-                                if (!response) throw new Error('Not found on the download server');
-
-                                const buffer = Buffer.from(await response.arrayBuffer());
-                                const downloadedSize = validateDownloadedAsset(buffer, version, `${characterName}/${costumeName}/${filename}`);
+                                const downloaded = await downloadAssetWithRetry(url, abortController.signal, version, `${characterName}/${costumeName}/${filename}`);
+                                if (!downloaded) throw new Error('Not found on the download server');
+                                const { buffer, size: downloadedSize } = downloaded;
                                 await mkdir(costumePath, { recursive: true });
                                 await writeFileClearingReadOnly(destPath, buffer);
 
@@ -1068,11 +1097,9 @@ router.post('/download', async (request, response) => {
                     downloadTasks.push(async () => {
                         if (isSkipped(characterName)) return;
                         try {
-                            const response = await downloadWithRetry(url, abortController.signal);
-                            if (!response) throw new Error('Not found on the download server');
-
-                            const buffer = Buffer.from(await response.arrayBuffer());
-                            const downloadedSize = validateDownloadedAsset(buffer, loreVersion, loreName);
+                            const downloaded = await downloadAssetWithRetry(url, abortController.signal, loreVersion, loreName);
+                            if (!downloaded) throw new Error('Not found on the download server');
+                            const { buffer, size: downloadedSize } = downloaded;
                             await mkdir(dirname(destPath), { recursive: true });
                             await writeFileClearingReadOnly(destPath, buffer);
 

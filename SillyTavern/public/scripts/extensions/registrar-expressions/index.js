@@ -1,3 +1,4 @@
+import { getRequestHeaders } from '../../../script.js';
 import { eventSource, event_types } from '../../events.js';
 import { isMobile } from '../../RossAscends-mods.js';
 import { getExpressionLabel } from '../expressions/index.js';
@@ -497,6 +498,70 @@ async function resolveRegistrarExpressionPath(name, outfit, emotion) {
     return getExpression(emotion) || getExpression('neutral');
 }
 
+// Characters imported through the WeyPhone Registrar app have their sprites on disk under
+// characters/Registrar-<id>/<clothed|underwear|nude>/ (src/registrar/expressions.js). Those are
+// preferred over the live Registrar lookup: they are keyed by the character's Registrar id, so a
+// shared first name (there are several "Aria"s) shows the character the user actually imported.
+/** @type {Promise<Map<string, number>> | null} lowercase "name" and "name surname" -> Registrar id */
+let localRegistrarIndex = null;
+function getLocalRegistrarIndex() {
+    if (!localRegistrarIndex) {
+        localRegistrarIndex = fetch('/api/registrar/library', { headers: getRequestHeaders() })
+            .then((res) => res.ok ? res.json() : null)
+            .then((library) => {
+                const index = new Map();
+                for (const item of library?.items ?? []) {
+                    if (item?.kind !== 'character' || !Number.isSafeInteger(Number(item.id))) continue;
+                    const first = String(item.name || '').trim().toLowerCase();
+                    const full = `${first} ${String(item.surname || '').trim().toLowerCase()}`.trim();
+                    for (const key of [full, first]) {
+                        if (key && !index.has(key)) index.set(key, Number(item.id));
+                    }
+                }
+                return index;
+            })
+            .catch(() => {
+                localRegistrarIndex = null;
+                return new Map();
+            });
+    }
+    return localRegistrarIndex;
+}
+
+// Short-lived, unlike getSpriteList's page-load cache: sprites keep arriving in the background for
+// a while after an import, and an empty/partial listing must not stick for the whole session.
+/** @type {Map<string, {time: number, list: {label: string, path: string}[]}>} */
+const localRegistrarSprites = new Map();
+async function getLocalRegistrarSprites(folder) {
+    const hit = localRegistrarSprites.get(folder);
+    if (hit && Date.now() - hit.time < 60_000) return hit.list;
+    const list = await fetch(`/api/sprites/get?name=${encodeURIComponent(folder)}`)
+        .then((res) => res.ok ? res.json() : [])
+        .then((data) => Array.isArray(data) ? data : [])
+        .catch(() => []);
+    localRegistrarSprites.set(folder, { time: Date.now(), list });
+    return list;
+}
+
+async function resolveLocalRegistrarPath(name, outfit, emotion) {
+    const index = await getLocalRegistrarIndex();
+    const normalized = String(name || '').trim().toLowerCase();
+    const id = index.get(normalized) ?? index.get(normalized.split(/\s+/)[0]);
+    if (id === undefined) return '';
+    const outfits = outfit === 'clothed' ? ['clothed'] : [outfit, 'clothed'];
+    const emotions = emotion === 'neutral' ? [emotion] : [emotion, 'neutral'];
+    for (const fit of outfits) {
+        const folder = `Registrar-${id}/${fit}`;
+        const sprites = await getLocalRegistrarSprites(folder);
+        for (const lab of emotions) {
+            // Same variant picking as the official cast (anger / anger-2, "reroll if same").
+            const path = chooseVariant(`${folder}|${lab}`, sprites.filter((sp) => sp?.path && sp.label === lab).map((sp) => sp.path));
+            if (path) return path;
+        }
+    }
+    return '';
+}
+
 /** @type {Map<string, Promise<{label: string, path: string}[]>>} */
 const spriteListCache = new Map();
 
@@ -551,8 +616,11 @@ async function resolveExpression(name){
         }
         return { path: '', name: name, isOfficial: true, outfit: outfit, emotion: emotion };
     }
+    // Downloaded sprites first; the live Registrar covers characters not imported (or not yet
+    // finished downloading) and anything missing locally.
+    const localPath = await resolveLocalRegistrarPath(name, outfit, emotion);
     return {
-        path: await resolveRegistrarExpressionPath(name, outfit, emotion),
+        path: localPath || await resolveRegistrarExpressionPath(name, outfit, emotion),
         name: name,
         isOfficial: false,
         outfit: outfit,
@@ -816,6 +884,12 @@ function initExtension() {
             console.log(`${LOGGING_PREFIX} SETTINGS_UPDATED received, scheduling refresh.`);
         }
         scheduleRefresh();
+    });
+
+    // The WeyPhone Registrar app emits this after every import/update/remove.
+    eventSource.on(event_types.WORLDINFO_UPDATED, () => {
+        localRegistrarIndex = null;
+        localRegistrarSprites.clear();
     });
 
     // Hide the base right side character

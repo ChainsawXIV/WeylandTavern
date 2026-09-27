@@ -4,7 +4,10 @@ import { eventSource, event_types } from '../../../events.js';
 import { getSettings } from './config.js';
 import { createRegistrarApp } from './registrarApp.js';
 
-export function createHostedRegistrar(onChanged) {
+// saveWeyPhoneSettings must be WeyPhone's own save: WeyPhone settings are loaded from
+// data/<user>/weyphone/weyphone.json, so a plain SillyTavern settings.json save of these Registrar
+// preferences (browse filters, auto-load) was silently lost on the next page load.
+export function createHostedRegistrar(onChanged, saveWeyPhoneSettings = saveSettingsDebounced) {
     async function setActive(name, active) {
         const index = selected_world_info.indexOf(name);
         if (active && index < 0) selected_world_info.push(name);
@@ -34,11 +37,11 @@ export function createHostedRegistrar(onChanged) {
             const settings = getSettings(SillyTavern.getContext().extensionSettings).registrar;
             settings.browseFilters = value;
             delete settings.hideAnthroCharacters;
-            saveSettingsDebounced();
+            saveWeyPhoneSettings();
         },
         setAutoActivateNewImports(value) {
             getSettings(SillyTavern.getContext().extensionSettings).registrar.autoActivateNewImports = value;
-            saveSettingsDebounced();
+            saveWeyPhoneSettings();
         },
         async onLibraryChange(library, activate) {
             worldInfoCache.delete(library.bookName);

@@ -6,7 +6,11 @@ export const CHARACTERS_WITH_EXPRESSIONS = Object.freeze([
     "Gemini", "Hannah", "Indigo", "Jade", "Jenn", "Kai", "Karmen", "Khepri", "Kiera", "Koshizu", "Kressa", "Kris", "Lentyl",
     "Loona", "Lucy", "Luna", "Lurkle", "Lyris", "Mika", "Muse", "Ṇ̶̰̼͘a̶͍̅́̒r̵̓̏̉̈́ā̸͒̔̄", "Nathan", "Nefara", "Nix", "Professor Akiyama",
     "Rein", "Rivera", "Rivet", "Rosa", "Serra", "Seth", "Shani", "Sofya", "Summer", "Sunny", "Vera", "Vesper", "Vindica",
-    "Warren", "Willow", "Yue-Lin", "Astrid", "Neshe", "Fawne", "Tawny", "Chaska", "Gem"
+    "Warren", "Willow", "Yue-Lin", "Astrid", "Neshe", "Fawne", "Tawny", "Chaska", "Gem",
+    "Adrian", "Ahset", "Bastian", "Bram", "Ben", "Brietta", "Caden", "Deredra", "Derek", "Dmitri", "Elowen", "Emily", 
+    "Garret", "Gaven", "Hiroshi", "Kellen", "Kyana", "Leo", "Lexa", "Margaret", "Mason", "Mark", "Miu", "Montenegro",
+    "Navine", "Remy", "Richard", "Rue", "Sam", "Skye", "Sobek", "Tawny", "Tessa", "Thorne", "Toylyn", "Travis",
+    "Vesna", "Zora"
 ]);
 
 // Alternate names that redirect to a canonical name (the key must match the sprite folder).

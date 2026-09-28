@@ -24,6 +24,8 @@ export const CHARACTER_ALIASES = Object.freeze({
     "Mr. Wolfy": ["Wolfy"],
     "Thorne": ["Aris"],
     "Koshizu": ["Koko"],
+    "Margaret": ["Marge"],
+    "Richard": ["Big Rick"],
 });
 
 // Members of multi-character cards whose names aren't in the card name.

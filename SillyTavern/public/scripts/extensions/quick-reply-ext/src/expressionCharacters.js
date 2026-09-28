@@ -9,14 +9,14 @@ export const CHARACTERS_WITH_EXPRESSIONS = Object.freeze([
     "Warren", "Willow", "Yue-Lin", "Astrid", "Neshe", "Fawne", "Tawny", "Chaska", "Gem",
     "Adrian", "Ahset", "Bastian", "Bram", "Ben", "Brietta", "Caden", "Deredra", "Derek", "Dmitri", "Elowen", "Emily", 
     "Garret", "Gaven", "Hiroshi", "Kellen", "Kyana", "Leo", "Lexa", "Margaret", "Mason", "Mark", "Miu", "Montenegro",
-    "Navine", "Remy", "Richard", "Rue", "Sam", "Skye", "Sobek", "Tawny", "Tessa", "Thorne", "Toylyn", "Travis",
-    "Vesna", "Zora"
+    "Navine", "Remy", "Richard", "Rue", "Sam", "Skye", "Sobek",  "Tessa", "Thorne", "Torylyn", "Travis",
+    "Vesna", "Zora", "Jericho"
 ]);
 
 // Alternate names that redirect to a canonical name (the key must match the sprite folder).
 // Aliases are matched exactly in quick-reply-ext and case-insensitively in registrar-expressions.
 export const CHARACTER_ALIASES = Object.freeze({
-    "Professor Akiyama": ["Professor Akiyama", "Akiyama", "Sayori"],
+    "Professor Akiyama": ["Prof Akiyama", "Prof. Akiyama", "Akiyama", "Sayori"],
     "Ṇ̶̰̼͘a̶͍̅́̒r̵̓̏̉̈́ā̸͒̔̄": ["Nara"],
     "Yue-Lin": ["YueLin"],
     "Nix": ["Nicole"],

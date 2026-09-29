@@ -918,7 +918,9 @@ scenarios.set(
 scenarios.set(
     "Chaska", 
     {
-        tags: ["Chaska", "Okamimimi"],
+        tags: ["Chaska"],
+        // Chaska is not an Okamimimi; this also strips the wrong tag from installs that already got it.
+        removeTags: ["Okamimimi"],
         greetings: [
 
         ]

@@ -239,6 +239,18 @@ async function initAudioFiles() {
     console.log(`[TIP+] Audio initialized: ${audioCache.osu.length} Osu, ${audioCache.ios.length} iOS, Osu-specific: ${audioCache.osuDelete ? 'del' : '-'}/${audioCache.osuEnter ? 'enter' : '-'}`);
 }
 
+// Weyland: both sound switches ship off, yet every page load downloaded and decoded all nine
+// bundled sounds. They now load only once a sound is actually wanted: at startup if either
+// switch (character sounds OR user typing sounds - they are independent) is already on, the
+// moment either is switched on, and as a safety net on the first play attempt. Memoized so the
+// cache is never filled twice. Until the files finish loading, playTypingSound falls back to
+// its synthesized sound, as it always did when a file was missing.
+let audioFilesPromise = null;
+function ensureAudioFiles() {
+    if (!audioFilesPromise) audioFilesPromise = initAudioFiles();
+    return audioFilesPromise;
+}
+
 /**
  * Play audio file with volume control
  * @param {Audio} audio Audio element to play
@@ -386,6 +398,7 @@ function getCharacterAvatar() {
  */
 function playTypingSound(volume, theme = 'ios', isUser = false, key = null) {
     const settings = getSettings();
+    ensureAudioFiles();
 
     // Detect special keys
     const isDelete = key === 'Backspace' || key === 'Delete';
@@ -1352,6 +1365,7 @@ function addExtensionSettings(settings) {
     // User Sound settings
     const userSoundCheckbox = createCheckbox(t`Enable User Typing Sounds`, settings.userSoundEnabled, v => {
         settings.userSoundEnabled = v;
+        if (v) ensureAudioFiles();
         userSoundThemeRow.style.display = v ? 'block' : 'none';
     });
     userDrawer.content.append(userSoundCheckbox);
@@ -1485,6 +1499,7 @@ function addExtensionSettings(settings) {
     // Sound checkbox
     const soundCheckbox = createCheckbox(t`Enable Character Typing Sounds`, settings.soundEnabled, v => {
         settings.soundEnabled = v;
+        if (v) ensureAudioFiles();
         volumeRow.style.display = v ? 'flex' : 'none';
     });
     soundDrawer.content.append(soundCheckbox);
@@ -1693,8 +1708,8 @@ function hideUserTypingIndicator() {
     const settings = getSettings();
     addExtensionSettings(settings);
 
-    // Initialize audio files (bundled + custom sounds)
-    initAudioFiles();
+    // Initialize audio files (bundled + custom sounds) - only if a sound switch is on (see ensureAudioFiles)
+    if (settings.soundEnabled || settings.userSoundEnabled) ensureAudioFiles();
 
     const showEvents = [event_types.GENERATION_AFTER_COMMANDS];
     const hideEvents = [event_types.GENERATION_STOPPED, event_types.GENERATION_ENDED, event_types.CHAT_CHANGED];

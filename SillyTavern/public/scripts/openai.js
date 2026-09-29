@@ -1592,6 +1592,34 @@ function checkModerationError(data, { quiet = false } = {}) {
     }
 }
 
+// Weyland: a provider can refuse a request outright, putting its reason in a `refusal` field (the
+// OpenAI format, which OpenRouter and most proxies relay) with empty `content`. Nothing read that
+// field, so the user got a blank reply and no explanation. Since 2026-09-28 the common case is
+// Anthropic's anti-distillation check ("...restrictions on reverse engineering or duplicating
+// model outputs"), which misfires on roleplay prompts that ask for a written-out planning pass.
+const ANTI_DISTILLATION_REFUSAL = /reverse engineering|duplicating model outputs|distill/i;
+
+/**
+ * Shows a toast when the response is a refusal. At most once per response (tracked on `state`).
+ * @param {any} data Parsed response chunk or full response
+ * @param {object|null} state Streaming state object, or null for a non-streaming response
+ */
+function checkRefusal(data, state) {
+    const choice = data?.choices?.[0];
+    // Anthropic's own format (Claude source) has no text, only the stop reason.
+    const refusal = choice?.delta?.refusal ?? choice?.message?.refusal ?? (data?.delta?.stop_reason === 'refusal' ? t`No reason given.` : null);
+    if (!refusal || state?.refusalShown) return;
+    if (state) state.refusalShown = true;
+    // Provider text goes into an HTML toast, so it is escaped.
+    const said = $('<div>').text(String(refusal)).html();
+    if (ANTI_DISTILLATION_REFUSAL.test(refusal)) {
+        toastr.error(`${t`The provider's anti-distillation check blocked this message. That check targets people copying the model, not roleplay, but it can misfire. Swipe to try again; if it keeps happening, switch PromptOS to the Beta Prompt.`}<br><br><small>${said}</small>`,
+            t`Message blocked (anti-distillation)`, { timeOut: 20000, extendedTimeOut: 10000, escapeHtml: false });
+    } else {
+        toastr.error(said, t`The provider refused this message`, { timeOut: 15000, escapeHtml: false });
+    }
+}
+
 /**
  * Gets the API model for the selected chat completion source.
  * @param {string} source If it's set, ignores active source
@@ -2394,6 +2422,7 @@ async function sendOpenAIRequest(type, messages, signal, { jsonSchema = null } =
                 if (rawData === '[DONE]') return;
                 tryParseStreamingError(response, rawData);
                 const parsed = JSON.parse(rawData);
+                checkRefusal(parsed, state);
 
                 if (Array.isArray(parsed?.choices) && parsed?.choices?.[0]?.index > 0) {
                     const swipeIndex = parsed.choices[0].index - 1;
@@ -2414,6 +2443,7 @@ async function sendOpenAIRequest(type, messages, signal, { jsonSchema = null } =
 
         checkQuotaError(data);
         checkModerationError(data);
+        checkRefusal(data, null);
 
         if (data.error) {
             const message = data.error.message || response.statusText || t`Unknown error`;

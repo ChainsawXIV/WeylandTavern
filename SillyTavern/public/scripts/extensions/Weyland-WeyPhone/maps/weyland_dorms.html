@@ -313,6 +313,10 @@ body:not(.altFont) .you-badge{background:rgba(201,150,30,.85)}
 /* Special spaces */
 .sp rect{pointer-events:none}
 .sp.ra rect{fill:var(--pl-staff);stroke:#a08a20;stroke-width:1.4}
+/* A numbered RA room (277½) is a real, hoverable room, but stays staff-gold whether or not
+   anyone lives in it. Over capacity still shows red, like every other room. */
+.room.ra.e .rb,.room.ra.o .rb{fill:var(--pl-staff);stroke:#a08a20;stroke-width:1.4}
+.room.ra.e:hover .rb,.room.ra.o:hover .rb{fill:#fff0a0;stroke:#7a6818;stroke-width:2}
 .sp.lau rect{fill:var(--pl-laundry);stroke:#3a8aa2;stroke-width:1.4}
 .sp.bath rect{fill:var(--pl-bath);stroke:#7a4a8a;stroke-width:1.4}
 .sp.com rect{fill:var(--pl-public);stroke:var(--pl-wall2);stroke-width:1.2;stroke-dasharray:none}
@@ -902,6 +906,9 @@ const VALID_ROOMS = (() => {
   for (let f = 1; f <= 3; f++) {
     for (let n = 2;  n <= 29; n++) s.add(String(f) + String(n).padStart(2, '0'));
     for (let n = 68; n <= 94; n++) s.add(String(f) + String(n).padStart(2, '0'));
+    // The left wing's RA room (the gold room between 77 and the laundry) has no number of its
+    // own, so it goes by "77½": Sam, the RA, lives in "Room 277 1/2".
+    s.add(String(f) + '77½');
   }
   return s;
 })();
@@ -917,6 +924,11 @@ function parseDwelling(dwelling){
   if (BLDG_RE.sterling.test(s)) building = 'sterling';
   else if (BLDG_RE.osee.test(s)) building = 'osee';
   if(!building) return null;
+  // Half rooms first ("277 1/2", "277½", "277.5"), or "277" would win and put an RA in the
+  // student room next door.
+  for (const m of s.matchAll(/(\d{3})\s*(?:½|1\/2|\.5)(?!\d)/g)) {
+    if (VALID_ROOMS.has(m[1] + '½')) return { building, room: m[1] + '½' };
+  }
   const matches = s.match(/\d{3}/g) || [];
   for (const m of matches) {
     if (VALID_ROOMS.has(m)) return { building, room: m };
@@ -1432,10 +1444,12 @@ function layout(floor){
   };
   // RA cell — colour-coded only; the legend already spells out "RA / Staff" so
   // we don't repeat the label inside the rectangle on the map.
-  const addRA = (x, y, w, h, corner='br') => {
+  // Given a room suffix, the RA cell becomes a real (gold) room that can hold residents.
+  const addRA = (x, y, w, h, corner='br', sfx=null) => {
     const d = bathDimsForCorner(corner);
     const a = computeAnchors(x, y, w, h, corner, d.bathW, d.bathH);
-    items.push({k:'s', lbl:'', x, y, w, h, c:'ra', labelCx:a.resCx, labelCy:a.resCy});
+    if (sfx) items.push({k:'r', id:`${floor}${sfx}`, ra:true, x, y, w, h, ...a});
+    else items.push({k:'s', lbl:'', x, y, w, h, c:'ra', labelCx:a.resCx, labelCy:a.resCy});
     enclosedPvt(x, y, w, h, corner);
   };
   // Single-occupancy student room with enclosed PVT (rooms 83 / 18)
@@ -1471,7 +1485,7 @@ function layout(floor){
   // Block 4: outer = (180,182) paired ; inner = RA (top, with enclosed PVT) + LAUNDRY (bottom).
   // LAUNDRY's south wall sits on the E-W hall's north wall — door opens south.
   vPair(80, 82, LW_OUT_X, y, 'right');
-  addRA(LW_IN_X, y, WROOM, HROOM, 'tl');                  // PVT in NW corner (toward N-S hall)
+  addRA(LW_IN_X, y, WROOM, HROOM, 'tl', '77½');           // PVT in NW corner (toward N-S hall)
   addSp('', LW_IN_X, y + HROOM, WROOM, HROOM, 'lau');
   y += PAIR_H + VG;
 
@@ -1659,7 +1673,8 @@ function svg(floor){
       inner += `<text class="rnm" x="${it.resCx}" y="${it.resCy + 7}">+${res.length-1} more</text>`;
     }
     const you = isUserRoom(it.id) ? ' you' : '';
-    parts.push(`<g class="room ${st}${you}" data-id="${it.id}">${shape}${inner}</g>`);
+    const ra = it.ra ? ' ra' : '';
+    parts.push(`<g class="room ${st}${you}${ra}" data-id="${it.id}">${shape}${inner}</g>`);
   }
 
   for(const it of items){

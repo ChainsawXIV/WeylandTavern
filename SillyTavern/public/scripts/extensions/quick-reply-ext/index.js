@@ -2530,7 +2530,10 @@ async function XXX(charName) {
         if (getLocalVariable("RPPOVLocalSet") === "") setLocalVariable("RPPOVLocal", getGlobalVariable("RPPOV"));
         if (/Kinsbane Manor|Aethel|Muse|Kressa/.test(charName)) await SpecialChar();
         if (getLocalVariable("LocalN") === "") setLocalVariable("LocalNarrator", getGlobalVariable("Narrator"));
-        if (ravs.get(getGlobalVariable("PromptChoice")) === undefined) setGlobalVariable("PromptChoice", "Current Prompt");
+        // Default is Beta since 2026-09-28: Anthropic's anti-distillation check refuses Current
+        // Prompt's written-out analysis procedure, while Beta's "scene sheet" version goes through.
+        // Only applies when no valid choice is saved; a user who picked Current keeps it.
+        if (ravs.get(getGlobalVariable("PromptChoice")) === undefined) setGlobalVariable("PromptChoice", "Beta Prompt");
         const pc = getGlobalVariable("PromptChoice");
         const rav = ravs.get(pc) || ravs.get("Current Prompt");
         if (!rav) throw new Error("No rav found");

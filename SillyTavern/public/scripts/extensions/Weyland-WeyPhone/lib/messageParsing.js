@@ -1,5 +1,21 @@
 
 const ANALYSIS_BLOCK_RE = /<analysis>[\s\S]*?<\/analysis>/;
+// Beta's tag-free replacement for the analysis block (see phonePromptPolicy.js): a "SCENE SHEET"
+// line through an "END OF SCENE SHEET" line. Phone requests strip the procedure, but a model can
+// still echo one, so it is treated exactly like an analysis block.
+const SCENE_SHEET_BLOCK_RE = /^[ \t]*SCENE SHEET[ \t]*$[\s\S]*?^[ \t]*END OF SCENE SHEET[ \t]*$/m;
+const SCENE_SHEET_OPEN_RE = /^[ \t]*SCENE SHEET[ \t]*$/m;
+
+/** Drops a leading scratch block. Returns null when one was opened but never closed. */
+function stripScratchBlock(text) {
+    for (const [block, open] of [[ANALYSIS_BLOCK_RE, /<analysis>/], [SCENE_SHEET_BLOCK_RE, SCENE_SHEET_OPEN_RE]]) {
+        const match = text.match(block);
+        if (match) return text.slice(match.index + match[0].length);
+        // Opened but never closed (e.g. generation cut off mid-block): nothing usable survives.
+        if (open.test(text)) return null;
+    }
+    return text;
+}
 const INCOMING_LINE_RE = /^Incoming¦[^¦]*¦[^¦]*¦(.*)$/;
 const GROUP_INCOMING_LINE_RE = /^Incoming[¦|│][^¦|│]*[¦|│]([^¦|│]*)[¦|│](.*)$/;
 const FOOTER_LINE_RE = /^(\[[^\[\]]+\]\s*)+$/;
@@ -23,7 +39,7 @@ export function isAcceptableInboundMessage(content) {
 
 /**
  * Cleans up a raw model reply for storage/display: strips the <analysis>...</analysis>
- * reasoning-scaffold block, defensively strips a trailing [Word] [Word]-style footer line, then
+ * reasoning-scaffold block (or its SCENE SHEET ... END OF SCENE SHEET equivalent), defensively strips a trailing [Word] [Word]-style footer line, then
  * extracts each Incoming¦[Time]¦[Sender]¦[Message] line's message text as its own standalone
  * entry. Phone¦/Texting¦/Outgoing¦ lines and any other non-matching lines (including narration
  * that slipped through) are discarded. Falls back to the cleaned remainder as a single message if
@@ -38,14 +54,11 @@ export function parseReply(rawText) {
 
     let text = rawText.replace(/\r\n?/g, '\n');
 
-    const analysisMatch = text.match(ANALYSIS_BLOCK_RE);
-    if (analysisMatch) {
-        text = text.slice(analysisMatch.index + analysisMatch[0].length);
-    } else if (text.includes('<analysis>')) {
-        // Opening tag present but never closed (e.g. generation cut off mid-analysis) — no
-        // usable reply content survives past an unterminated analysis block.
-        return { messages: [], usedFallback: false };
-    }
+    const stripped = stripScratchBlock(text);
+    // Opening marker present but never closed (e.g. generation cut off mid-analysis) — no
+    // usable reply content survives past an unterminated analysis block or scene sheet.
+    if (stripped === null) return { messages: [], usedFallback: false };
+    text = stripped;
 
     const lines = text.split('\n');
     let lastContentIdx = lines.length - 1;
@@ -80,9 +93,9 @@ export function parseReply(rawText) {
 export function parseGroupReply(rawText) {
     if (!rawText || typeof rawText !== 'string') return { messages: [], usedFallback: false };
     let text = rawText.replace(/\r\n?/g, '\n');
-    const analysisMatch = text.match(ANALYSIS_BLOCK_RE);
-    if (analysisMatch) text = text.slice(analysisMatch.index + analysisMatch[0].length);
-    else if (text.includes('<analysis>')) return { messages: [], usedFallback: false };
+    const stripped = stripScratchBlock(text);
+    if (stripped === null) return { messages: [], usedFallback: false };
+    text = stripped;
     const messages = [];
     for (const line of text.split('\n')) {
         const match = line.match(GROUP_INCOMING_LINE_RE);

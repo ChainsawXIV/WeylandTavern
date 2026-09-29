@@ -694,7 +694,7 @@ function applyPawXaiPalette(panel, settings) {
 }
 
 async function resolveCharacterPrompt(context, character, { lorebookContact = false, lorebookName = 'Weyland' } = {}) {
-    const promptChoice = context.variables.global.get('PromptChoice') || 'Current Prompt';
+    const promptChoice = context.variables.global.get('PromptChoice') || 'Beta Prompt';
     const ravEntry = resolveMasterPrompt(ravs, promptChoice);
     const htmlEnabled = context.variables.global.get('HTML!') === 'Enabled';
     const rpFocus = context.variables.global.get('RPFocus') || '';
@@ -5855,7 +5855,7 @@ async function handleNarrativeAction(button) {
             const next = !before.hardMode;
             const coach = next ? extractHardModeDirective(script) : extractHardModeOffDirective(script);
             if (!coach) throw new Error('The canonical Hard Mode text could not be found in Storytelling Settings.');
-            if (next && !['Current Prompt', 'Beta Prompt'].includes(before.prompt)) global.set('PromptChoice', 'Current Prompt');
+            if (next && !['Current Prompt', 'Beta Prompt'].includes(before.prompt)) global.set('PromptChoice', 'Beta Prompt');
             global.set('HardToggle', next ? 'On' : 'Off');
             global.set('Coach', coach);
             await rebuildNarrativePrompts('XXX');

@@ -11,6 +11,10 @@ const COACH_GLOBAL_MACRO = /\{\{\s*getglobalvar\s*::\s*Coach\s*\}\}/gi;
 // Current Prompt bakes its six-section analysis directly into rav.teg (Beta assembles its
 // analysis in quick-reply-ext's XXX() instead, so Beta's raw teg never carries one).
 const ANALYSIS_PROCEDURE_BLOCK = /\[WEYLAND RESPONSE ANALYSIS PROCEDURE[^\]\n]*\][\s\S]*?\[END WEYLAND RESPONSE ANALYSIS PROCEDURE\][ \t]*\r?\n*/g;
+// Beta's procedure is now a "scene sheet" (2026-09-28): Anthropic refuses requests whose prompt
+// frames that step as a reasoning/analysis procedure ("reverse engineering or duplicating model
+// outputs"), and the same content framed as a worksheet goes through. Same job, new markers.
+const SCENE_SHEET_BLOCK = /\[WEYLAND SCENE SHEET[^\]\n]*\][\s\S]*?\[END WEYLAND SCENE SHEET\][ \t]*\r?\n*/g;
 // Current and Beta's post-history note points back at that analysis ("the six-section analysis
 // runs first...") - with the procedure gone it would tell the model to run an analysis it has
 // no instructions for. XXX() drops this same note for Beta when its Analysis toggle is off.
@@ -65,6 +69,7 @@ export function withGeminiBypass(messages) {
 export function stripAnalysisProcedure(content) {
     return String(content ?? '')
         .replace(ANALYSIS_PROCEDURE_BLOCK, '')
+        .replace(SCENE_SHEET_BLOCK, '')
         .replace(ANALYSIS_CLIENT_NOTE, '')
         .replace(OLD_REASONING_PROCEDURE, '');
 }

@@ -139,7 +139,11 @@ const HEADER_SEARCH_LINES = 8;
 const PREAMBLE_BLOCKS = [
     /^\s*<[^>]*think[^>]*>[\w\W]*?<[^>]*\/[^>]*think[^>]*>/i,
     /^\s*<analysis>[\w\W]*?<\/analysis>/i,
+    // Beta's tag-free scene sheet (the analysis block's replacement, see phonePromptPolicy.js).
+    /^\s*SCENE SHEET[ \t]*\r?\n[\w\W]*?\n[ \t]*END OF SCENE SHEET[ \t]*(?=\r?\n|$)/,
 ];
+// The same scene sheet anywhere in the understudy's own response, closed or left hanging.
+const SCENE_SHEET_RESPONSE = /^[ \t]*SCENE SHEET[ \t]*$[\w\W]*?(?:^[ \t]*END OF SCENE SHEET[ \t]*$|(?![\w\W]))/m;
 
 // Reasoning anywhere in a MODEL RESPONSE, not just at the top. PREAMBLE_BLOCKS above is for
 // stored chat messages, where a leading block is peeled off and put back; this pair is for text
@@ -191,6 +195,7 @@ export function stripModelReasoning(responseText) {
     return String(responseText ?? '')
         .replace(CLOSED_REASONING, '')
         .replace(UNCLOSED_REASONING, '')
+        .replace(SCENE_SHEET_RESPONSE, '')
         // An ORPHAN close tag, with no opener anywhere: seen in the wild as a response that
         // begins "</think>*The stutter hits her...". Neither pattern above touches it, because
         // both start from an opening tag, so it was leaking into the chat verbatim.

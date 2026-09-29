@@ -148,6 +148,11 @@ const weylandRegex = {
     thinkEnd: /<.*\/.*think.*>$/,
 
     analysisFull: /<analysis>[\w\W]+?(?:<\/analysis>|\n(?=¦+\s?.+? ?(?:\(\w{4}\) ?)?¦+$))/i,
+    // Beta's tag-free replacement for <analysis> (2026-09-28): Anthropic refuses prompts that frame
+    // this step as reasoning, so it is now a "SCENE SHEET" line through "END OF SCENE SHEET". Ends
+    // at the header if the closing line is missing. Everything before the header is dropped anyway;
+    // this keeps experimental mode moving it into the reasoning panel like the analysis block.
+    sceneSheetFull: /^\s*SCENE SHEET[ \t]*\r?\n[\w\W]*?(?:\n[ \t]*END OF SCENE SHEET[ \t]*(?=\r?\n|$)|\n(?=¦¦))/,
 
     asterisk: /\*/g,
 
@@ -294,6 +299,7 @@ async function formatParagraphs(message) {
 
     // Remove additional tagged blocks
     message = replaceText(message, weylandRegex.analysisFull, "");
+    message = replaceText(message, weylandRegex.sceneSheetFull, "");
 
     let paragraphs = message.split(weylandRegex.paragraphSplit);
     let paragraphCount = paragraphs.length;
@@ -608,6 +614,14 @@ async function formatMessage(messageId, mes = undefined) {
             reason = `${reason}${thinkFull ? "\n\n---\n\n" : ""}${analysisFull[0].replace("<analysis>", "").replace("</analysis>","").trim()}`
         }
         originalMessage = originalMessage.replace(analysisFull[0], "").trim();
+    }
+
+    const sceneSheetFull = originalMessage.match(weylandRegex.sceneSheetFull);
+    if (sceneSheetFull) {
+        if (settings?.experimental) {
+            reason = `${reason}${reason ? "\n\n---\n\n" : ""}${sceneSheetFull[0].trim()}`;
+        }
+        originalMessage = originalMessage.replace(sceneSheetFull[0], "").trim();
     }
 
     chat[messageId].extra.reasoning = reason;

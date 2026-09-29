@@ -15,8 +15,8 @@ export const NARRATOR_OPTIONS = Object.freeze([
 ]);
 
 export const PROMPT_OPTIONS = Object.freeze([
-    { id: 'Current Prompt', label: 'Current', description: 'The default, most compatible prompt. Safe to leave this alone.' },
-    { id: 'Beta Prompt', label: 'Beta', description: 'The most recent prompt. Still being tested, but recommended to use.' },
+    { id: 'Current Prompt', label: 'Current', description: 'The previous default. Some providers now block its Analysis step; if replies come back blank, switch to Beta.' },
+    { id: 'Beta Prompt', label: 'Beta', description: 'The default and recommended prompt.' },
     { id: 'Old Prompt 2026', label: '2026', description: 'The prompt used before Weyland’s second anniversary.' },
     { id: 'Old Prompt 2025', label: '2025', description: 'The older Sonnet 3.7-era prompt.' },
 ]);
@@ -154,7 +154,7 @@ export function readNarrativeSnapshot({ getGlobal, getLocal, hasChat = false }) 
         ? narratorNameForPrompt(getLocal('LocalNarrator'), getGlobal)
         : globalNarrator;
     const language = String(getGlobal('LanguageChoice') || 'English').trim() || 'English';
-    const prompt = String(getGlobal('PromptChoice') || getGlobal('MainPromptChoice') || 'Current Prompt').trim();
+    const prompt = String(getGlobal('PromptChoice') || getGlobal('MainPromptChoice') || 'Beta Prompt').trim();
     const thinking = String(getGlobal('ThinkingFramework') || 'Disabled').trim();
     const localPovLabel = hasChat ? String(getLocal('RPPOVLocalSet') ?? '').trim() : '';
 

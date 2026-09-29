@@ -23,7 +23,10 @@ export function registrarFilterOptions(items, filters) {
 export function hiddenByRegistrarFilters(item, filters) {
     if (item.kind !== 'character') return false;
     const normalized = normalizeRegistrarFilters(filters);
-    if (normalized.onlyExpressions && !(Number(item.expressions) > 0)) return true;
+    // Only a known zero hides a character. A server that predates sprite counts sends no
+    // `expressions` field at all; treating that as zero turned a saved "With expressions" filter
+    // into an empty list until the server was restarted, so missing counts leave the list alone.
+    if (normalized.onlyExpressions && typeof item.expressions === 'number' && item.expressions <= 0) return true;
     return FILTER_FIELDS.some(field => (field === 'tags' ? (Array.isArray(item.tags) ? item.tags : []) : [item[field]])
         .some(value => normalized[field].includes(filterValue(value))));
 }

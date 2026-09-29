@@ -1610,6 +1610,9 @@ function isMobileRouterLayout() {
     return window.matchMedia('(max-width: 700px), (pointer: coarse)').matches;
 }
 
+// No backdrop-filter on #wtr-modal: its background is 98% opaque, so a blur behind it was
+// invisible, yet it made the browser re-blur everything under the window on every repaint
+// (costly on phones and on browsers without GPU rendering).
 function buildModalHtml() {
     return `
 <div id="${MODAL_ID}" style="display:none; position:fixed; inset:0; z-index:99990; pointer-events:none;">
@@ -1620,7 +1623,6 @@ function buildModalHtml() {
     border:1px solid rgba(180,38,58,0.35);
     border-radius:10px;
     box-shadow:0 20px 60px rgba(0,0,0,0.8), 0 0 1px rgba(180,38,58,0.4);
-    backdrop-filter:blur(20px);
     display:flex; flex-direction:column;
     overflow:hidden;
     font-family:'JetBrains Mono',monospace;
@@ -2167,7 +2169,9 @@ function injectToolbarButton() {
 setInterval(() => {
     const now = Date.now();
     const hasCooldown = settings?.pool?.some(m => getEffectiveCooldownUntil(m) > now);
-    if (hasCooldown && document.getElementById(MODAL_ID)?.style.display !== 'none') {
+    // The window only exists once it has been opened, so "not built yet" must count as closed.
+    const overlay = document.getElementById(MODAL_ID);
+    if (hasCooldown && overlay && overlay.style.display !== 'none') {
         refreshCooldownDisplays();
         updateStatusBar();
     }
@@ -2183,7 +2187,10 @@ jQuery(async () => {
     getSettings();
     loadEventLog();
 
-    injectModal();
+    // The window is built the first time it is opened (openModal calls injectModal), not here.
+    // Routing never reads the window: settings live in extension_settings, and every render /
+    // status / log function returns early while its elements don't exist. Building ~770 hidden
+    // elements at startup only added page-load work for users who never open Router.
     injectToolbarButton();
 
     // Streamlined-UI-aware secondary launcher.

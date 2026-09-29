@@ -100,6 +100,14 @@
   to { transform: rotate(360deg); }
 }
 
+/* The overlay stays in the DOM, hidden with visibility, for the whole session. An infinite
+   animation keeps running (and keeps the browser producing frames) even while invisible, so it
+   only runs while the overlay is actually shown. It restarts from 0deg on show, which a spinner
+   can't visibly tell apart. */
+#wwt-overlay:not(.wwt-visible) .wwt-spinner {
+  animation: none;
+}
+
 #wwt-overlay .wwt-head-title {
   font-family: var(--monoFontFamily, 'JetBrains Mono', Consolas, monospace);
   font-size: 11px;

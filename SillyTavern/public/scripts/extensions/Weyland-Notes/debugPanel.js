@@ -1,3 +1,4 @@
+import { getTokenCountAsync } from '../../tokenizers.js';
 import { formatNotesPrompt } from './store.js';
 
 const MAX_LOG = 80;
@@ -33,6 +34,41 @@ function pushLog(kind, text) {
 
 function panel() {
     return document.getElementById('weyland-notes-debug');
+}
+
+/** Injected prompt text. Empty when notes are disabled. */
+function promptText(notes, enabled) {
+    return enabled ? (formatNotesPrompt(notes) || '') : '';
+}
+
+function formatTokenCount(n) {
+    return n === 1 ? '1 token' : `${n} tokens`;
+}
+
+let tokenSeq = 0;
+/** Last prompt string whose count is currently shown, so refreshes don't flicker. */
+let shownPrompt = null;
+
+async function updateTokenCount(text) {
+    const el = document.getElementById('wn-debug-tokens');
+    if (!el) return;
+    const seq = ++tokenSeq;
+    if (!text) {
+        shownPrompt = '';
+        el.textContent = '0 tokens';
+        return;
+    }
+    if (shownPrompt !== text) el.textContent = '…';
+    try {
+        const count = await getTokenCountAsync(text);
+        if (seq !== tokenSeq) return;
+        shownPrompt = text;
+        el.textContent = formatTokenCount(count);
+    } catch {
+        if (seq !== tokenSeq) return;
+        shownPrompt = text;
+        el.textContent = `~${Math.ceil(text.length / 4)} tokens`;
+    }
 }
 
 function bindFolds() {
@@ -85,12 +121,14 @@ function render() {
             : '<div class="weyland-notes-empty">No notes on this branch.</div>';
     }
 
+    const prompt = promptText(notes, enabled);
     const inject = document.getElementById('wn-debug-inject');
     if (inject) {
-        inject.textContent = enabled
-            ? (formatNotesPrompt(notes) || '(empty)')
-            : '(notes disabled — nothing injected)';
+        inject.textContent = !enabled
+            ? '(notes disabled — nothing injected)'
+            : (prompt || '(empty)');
     }
+    void updateTokenCount(prompt);
 
     const logEl = document.getElementById('wn-debug-log');
     if (logEl) {

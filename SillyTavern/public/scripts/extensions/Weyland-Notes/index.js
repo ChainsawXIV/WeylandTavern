@@ -20,6 +20,8 @@ import {
     emitChange,
     formatNotesPrompt,
     latestNotes,
+    parseNoteTags,
+    readNotes,
     summarizeNotes,
     writeNotes,
 } from './store.js';
@@ -32,6 +34,7 @@ export {
     formatNotesPrompt,
     hooks,
     latestNotes,
+    parseNoteTags,
     readNotes,
     summarizeNotes,
     writeNotes,
@@ -78,11 +81,13 @@ export function getActiveNotes() {
 }
 
 function injectPrompt(reason = '') {
-    const { setExtensionPrompt, isToolCallingSupported } = ctx();
+    const { setExtensionPrompt } = ctx();
     const enabled = getSettings().enabled;
     const value = enabled ? formatNotesPrompt(getActiveNotes()) : '';
-    setExtensionPrompt(PROMPT_KEY, value, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
-    updateToolsWarn(!enabled || isToolCallingSupported?.());
+    // User role, not system: this preset ends on Claude via a custom proxy, which drops
+    // a trailing system turn. Depth 0 keeps the guide as the last message before the reply.
+    setExtensionPrompt(PROMPT_KEY, value, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.USER);
+    updateToolsWarn();
     renderNotesList();
     refreshDebug(reason);
 }
@@ -114,6 +119,39 @@ function endSession() {
     injectPrompt();
 }
 
+function applyToMessage(mes, text) {
+    if (!mes || text == null) return;
+    mes.mes = text;
+    const sid = mes.swipe_id;
+    if (Array.isArray(mes.swipes) && Number.isInteger(sid) && mes.swipes[sid] != null) {
+        mes.swipes[sid] = text;
+    }
+}
+
+/** HelixMind frequently swallows native tools; harvest in-message [WN] / XML tags. */
+function harvestMessage(id) {
+    if (!getSettings().enabled) return;
+    const chat = ctx().chat;
+    const mes = chat?.[id];
+    if (!mes || mes.is_user || mes.is_system) return;
+
+    const { ops, text } = parseNoteTags(mes.mes || '');
+    if (!ops.length) return;
+
+    applyToMessage(mes, text);
+    let notes = session ? cloneNotes(session.notes) : latestNotes(chat, id);
+    for (const op of ops) {
+        const result = applyNoteOp(notes, op);
+        logDebug(result.ok ? (op.action || 'update') : 'skip', result.message);
+        if (result.ok) notes = result.notes;
+    }
+    if (session) session.notes = notes;
+    stamp(mes, notes);
+    injectPrompt();
+    emitChange(notes, 'tag');
+    if (!session) ctx().saveChat?.();
+}
+
 function runOp(op, { persist = true } = {}) {
     const current = getActiveNotes();
     const result = applyNoteOp(current, op);
@@ -135,53 +173,33 @@ function runOp(op, { persist = true } = {}) {
     };
 }
 
-function registerTool() {
-    const { registerFunctionTool, unregisterFunctionTool } = ctx();
-    unregisterFunctionTool?.(TOOL_NAME);
-    if (!getSettings().enabled) return;
+function isOurToolMessage(mes) {
+    const inv = mes?.extra?.tool_invocations;
+    return !!(mes?.is_system && Array.isArray(inv) && inv.length && inv.every(i => i?.name === TOOL_NAME));
+}
 
-    registerFunctionTool({
-        name: TOOL_NAME,
-        displayName: 'Scenario Note',
-        description: [
-            'Record a lasting canon update that overrides character cards and lorebooks.',
-            'Use for persistent changes: haircut, new relationship, destroyed building, death, move, renamed place.',
-            'Also note lasting outcomes of the user\'s recent actions when they change canon.',
-            'Do not record short-lived actions, dialogue, or anything still obvious in recent chat.',
-            'Do not add a note that already exists — update the same id or remove it.',
-            'Keep text to a few words, one sentence maximum.',
-        ].join(' '),
-        parameters: {
-            $schema: 'http://json-schema.org/draft-04/schema#',
-            type: 'object',
-            properties: {
-                action: {
-                    type: 'string',
-                    enum: ['add', 'update', 'remove'],
-                    description: 'add a new note, replace one by id, or delete by id',
-                },
-                id: {
-                    type: 'string',
-                    description: 'Stable short id such as "maya-hair" or "tavern-fire". Reuse it to update.',
-                },
-                text: {
-                    type: 'string',
-                    description: 'The note. Few words, one sentence max. Required for add/update.',
-                },
-            },
-            required: ['action', 'id'],
-        },
-        action: async (args) => {
-            const result = runOp(args, { persist: !session });
-            return [result.message, 'Current notes:', result.notes].join('\n');
-        },
-        formatMessage: (args) => {
-            const act = String(args?.action || 'update');
-            const id = args?.id ? ` (${args.id})` : '';
-            return `${act === 'remove' ? 'Removing' : 'Recording'} scenario note${id}`;
-        },
-        shouldRegister: () => getSettings().enabled,
-    });
+/** Native tool calls steal the RP turn on HelixMind. Tags on the reply are the recording path. */
+function registerTool() {
+    ctx().unregisterFunctionTool?.(TOOL_NAME);
+}
+
+/** Drop leftover Scenario Note system bubbles; keep the snapshot on the previous message. */
+async function retractToolBubbles() {
+    const chat = ctx().chat;
+    if (!Array.isArray(chat) || !chat.length) return;
+    let removed = false;
+    while (chat.length && isOurToolMessage(chat[chat.length - 1])) {
+        const notes = readNotes(chat[chat.length - 1]) || getActiveNotes();
+        const prev = chat[chat.length - 2];
+        if (prev) stamp(prev, notes);
+        await ctx().deleteLastMessage?.();
+        removed = true;
+    }
+    if (removed) {
+        logDebug('tools', 'Removed tool-call bubble');
+        injectPrompt();
+        ctx().saveChat?.();
+    }
 }
 
 function registerSlash() {
@@ -237,7 +255,7 @@ function renderNotesList() {
                 <span class="weyland-notes-row-id">${esc(n.id)}</span>
                 ${esc(n.text)}
             </div>
-            <button type="button" class="menu_button weyland-notes-remove" title="Remove note" data-id="${esc(n.id)}">×</button>
+            <button type="button" class="menu_button weyland-notes-remove" title="Remove Note" data-id="${esc(n.id)}">×</button>
         </div>
     `).join('');
     root.querySelectorAll('.weyland-notes-remove').forEach(btn => {
@@ -245,9 +263,9 @@ function renderNotesList() {
     });
 }
 
-function updateToolsWarn(ok) {
+function updateToolsWarn() {
     const el = document.getElementById('weyland-notes-tools-warn');
-    if (el) el.hidden = !!ok;
+    if (el) el.hidden = true;
 }
 
 async function addSettings() {
@@ -269,7 +287,7 @@ async function addSettings() {
         refreshDebug();
     });
     renderNotesList();
-    updateToolsWarn(!s.enabled || ctx().isToolCallingSupported?.());
+    updateToolsWarn();
 }
 
 function bindEvents() {
@@ -287,26 +305,32 @@ function bindEvents() {
         injectPrompt();
     });
 
+    // Strip tags before Formatter / expressions read the message.
+    eventSource.makeFirst(event_types.MESSAGE_RECEIVED, harvestMessage);
     eventSource.on(event_types.MESSAGE_RECEIVED, (id) => {
         commitTo(id, getActiveNotes());
         injectPrompt();
     });
+    eventSource.makeFirst(event_types.MESSAGE_UPDATED, harvestMessage);
+    eventSource.on(event_types.MESSAGE_EDITED, harvestMessage);
 
-    eventSource.on(event_types.TOOL_CALLS_PERFORMED, () => {
-        const chat = ctx().chat;
-        if (chat?.length) stamp(chat[chat.length - 1], getActiveNotes());
-        injectPrompt();
-    });
+    eventSource.on(event_types.TOOL_CALLS_RENDERED, () => retractToolBubbles());
 
     // Don't drop an in-flight snapshot: regenerate deletes the last message, and
     // a new swipe emits MESSAGE_SWIPED, before Generate() actually starts.
-    eventSource.on(event_types.CHAT_CHANGED, () => {
+    eventSource.on(event_types.CHAT_CHANGED, async () => {
         session = null;
+        await retractToolBubbles();
         injectPrompt('chat');
     });
     eventSource.on(event_types.MESSAGE_SWIPED, () => { if (!session) injectPrompt('swipe'); });
     eventSource.on(event_types.MESSAGE_DELETED, () => { if (!session) injectPrompt('delete'); });
-    eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, injectPrompt);
+    eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, (data) => {
+        const n = Array.isArray(data?.tools) ? data.tools.length : 0;
+        const names = n ? data.tools.map(t => t?.function?.name || t?.name).filter(Boolean).join(', ') : '';
+        logDebug('tools', n ? `${n} on request (${names})` : 'none on request — tags still work');
+        injectPrompt();
+    });
 }
 
 jQuery(async () => {
@@ -326,5 +350,6 @@ jQuery(async () => {
     bindEvents();
     setDebugPanelOpen(getSettings().debugPanel);
     injectPrompt();
+    await retractToolBubbles();
     console.log(`[${MODULE}] ready`);
 });

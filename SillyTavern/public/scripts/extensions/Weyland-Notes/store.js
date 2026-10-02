@@ -133,16 +133,66 @@ export function applyNoteOp(notes, { action, id, text } = {}) {
     return { notes: list, ok: true, message: `Added: ${noteId} — ${trimmed}` };
 }
 
+const XML_TAG = /<scenario_note\b([^>]*)>([\s\S]*?)<\/scenario_note>/gi;
+const LINE_TAG = /^[ \t]*\[WN\s+(add|update|remove)\s+([^\]]+?)\][ \t]*(.*?)[ \t]*$/gim;
+const INLINE_TAG = /\[WN\s+(add|update|remove)\s+([^\]]+?)\][ \t]*([^\n]*)/gi;
+
+function attrs(raw) {
+    const out = {};
+    const re = /(\w+)\s*=\s*["']([^"']*)["']/g;
+    let m;
+    while ((m = re.exec(raw || ''))) out[m[1].toLowerCase()] = m[2];
+    return out;
+}
+
+/**
+ * Pull note ops out of model text. HelixMind often drops native tools, so the
+ * prompt asks for [WN] / <scenario_note> tags in the same reply as the RP.
+ * @returns {{ ops: {action: string, id: string, text: string}[], text: string }}
+ */
+export function parseNoteTags(text) {
+    const src = String(text || '');
+    const ops = [];
+    XML_TAG.lastIndex = 0;
+    LINE_TAG.lastIndex = 0;
+    let next = src.replace(XML_TAG, (_, raw, body) => {
+        const a = attrs(raw);
+        ops.push({ action: a.action || 'add', id: a.id, text: String(body || '').trim() });
+        return '';
+    });
+    next = next.replace(LINE_TAG, (_, action, id, body) => {
+        ops.push({ action, id: String(id).trim(), text: String(body || '').trim() });
+        return '';
+    });
+    INLINE_TAG.lastIndex = 0;
+    next = next.replace(INLINE_TAG, (_, action, id, body) => {
+        ops.push({ action, id: String(id).trim(), text: String(body || '').trim() });
+        return '';
+    });
+    return { ops, text: next.replace(/\n{3,}/g, '\n\n').trim() };
+}
+
+const GUIDE = [
+    'Before the expression/clothing footer, you may record notes about the state of the scenario. They will be included in context for future messages until you say otherwise, as a supplement to chat history and baseline lore.',
+    'Only make note of information where all of the following are true:',
+    '- The state will be relevant often and should always be in context.',
+    '- The state deviates from the baseline in lorebooks and other context.',
+    '- The state will stay relevant over the long term, even if it changes.',
+    'Note only facts about characters or the world, without any additional context, reasoning, or events, and keep each description to a few words.',
+    '`[WN update id] revised state` updates an existing note. Prefer to do this if a relevant note already exists.',
+    '`[WN add id] state` adds a new note.',
+    '`[WN remove id]` removes a note. Do this if a note is no longer relevant.',
+    'If the state has not changed, make no further note of it.',
+].join('\n');
+
 export function formatNotesPrompt(notes, { guide = true } = {}) {
     const list = cloneNotes(notes);
     const lines = [];
     if (list.length) {
-        lines.push('CANON STATE UPDATES — these override character cards, lorebooks, and earlier chat when they conflict:');
-        for (const n of list) lines.push(`- ${n.text}`);
-        if (guide) lines.push('Record new lasting changes with scenario_note. Do not repeat the updates above.');
-    } else if (guide) {
-        lines.push('Use scenario_note for lasting canon changes that should override lorebooks (appearance, relationships, destroyed places, deaths, moves). Skip fleeting events. Never duplicate a note; update or remove instead. A few words, one sentence max.');
+        lines.push('CANON STATE — overrides cards, lore, and earlier chat on conflict. Id before the colon:');
+        for (const n of list) lines.push(`- ${n.id}: ${n.text}`);
     }
+    if (guide) lines.push(GUIDE);
     return lines.join('\n');
 }
 

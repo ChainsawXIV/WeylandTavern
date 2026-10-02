@@ -6,7 +6,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Weyland",
-    "version": "1.0.0",
+    "version": "1.1.1",
     "homePage": "",
     "auto_update": false,
     "description": "Persistent scenario notes as function tools, stored on each chat message and injected as canon overrides."

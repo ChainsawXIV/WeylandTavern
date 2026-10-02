@@ -35,6 +35,20 @@ function panel() {
     return document.getElementById('weyland-notes-debug');
 }
 
+function bindFolds() {
+    const el = panel();
+    if (!el || el.dataset.foldsBound) return;
+    el.dataset.foldsBound = '1';
+    el.addEventListener('click', (event) => {
+        const btn = event.target.closest('.wn-debug-fold');
+        if (!btn || !el.contains(btn)) return;
+        const section = btn.closest('.wn-debug-fold-section');
+        if (!section) return;
+        const collapsed = section.classList.toggle('is-collapsed');
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
+}
+
 function setOpen(open) {
     document.body.classList.toggle('wn-debug-open', !!open);
 }
@@ -42,6 +56,7 @@ function setOpen(open) {
 function render() {
     const el = panel();
     if (!el || !document.body.classList.contains('wn-debug-open')) return;
+    bindFolds();
 
     const notes = api.getNotes();
     const enabled = api.notesEnabled();

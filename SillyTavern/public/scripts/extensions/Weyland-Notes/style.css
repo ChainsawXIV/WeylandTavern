@@ -99,10 +99,20 @@ body.wn-debug-open .weyland-notes-debug {
     display: flex;
     flex-direction: column;
     min-height: 0;
-    flex: 0 1 auto;
 }
 
-.wn-debug-section h4 {
+.wn-debug-fold-section {
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+.wn-debug-fold-section.is-collapsed {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+.wn-debug-section h4,
+.wn-debug-fold {
     margin: 0 0 4px;
     font-size: 0.8em;
     letter-spacing: 0.04em;
@@ -110,34 +120,99 @@ body.wn-debug-open .weyland-notes-debug {
     opacity: 0.7;
 }
 
+.wn-debug-fold {
+    display: flex;
+    align-items: center;
+    gap: 0.45em;
+    width: 100%;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.wn-debug-fold:hover,
+.wn-debug-fold:focus-visible {
+    opacity: 1;
+}
+
+.wn-debug-fold:focus-visible {
+    outline: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+    outline-offset: 2px;
+}
+
+.wn-debug-fold-mark {
+    width: 0.42em;
+    height: 0.42em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translate(-0.05em, -0.08em);
+    flex-shrink: 0;
+}
+
+.wn-debug-fold-section.is-collapsed .wn-debug-fold {
+    margin-bottom: 0;
+}
+
+.wn-debug-fold-section.is-collapsed .wn-debug-fold-mark {
+    transform: rotate(-45deg) translate(0.05em, 0);
+}
+
+.wn-debug-fold-section.is-collapsed > :not(.wn-debug-fold) {
+    display: none;
+}
+
 .wn-debug-notes {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     overflow-y: auto;
-    max-height: 30%;
+    min-height: 0;
+    flex: 0 1 auto;
+    max-height: min(42vh, 28rem);
 }
 
 .wn-debug-note {
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    padding: 4px 0;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background-color: var(--SmartThemeBotMesBlurTintColor);
 }
 
 .wn-debug-note-id {
-    opacity: 0.5;
+    opacity: 0.55;
     font-size: 0.75em;
+}
+
+.wn-debug-note-text {
+    font-family: monospace;
+    font-size: 0.85em;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .wn-debug-inject {
     margin: 0;
     padding: 8px;
-    max-height: 28%;
     overflow: auto;
+    min-height: 0;
+    flex: 0 1 auto;
+    max-height: min(42vh, 28rem);
     white-space: pre-wrap;
     word-break: break-word;
+    font-family: monospace;
     font-size: 0.85em;
     line-height: 1.35;
     border-radius: 6px;
@@ -145,7 +220,8 @@ body.wn-debug-open .weyland-notes-debug {
 }
 
 .wn-debug-log-section {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-height: 6rem;
 }
 
 .wn-debug-log {

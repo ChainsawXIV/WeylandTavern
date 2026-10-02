@@ -1,21 +1,27 @@
 <div id="weyland-notes-debug" class="weyland-notes-debug">
     <div class="wn-debug-header">
         <div>
-            <b>Notes debug</b>
+            <b>Notes Debug</b>
             <span id="wn-debug-status" class="wn-debug-status"></span>
         </div>
         <span id="wn-debug-count" class="wn-debug-count"></span>
     </div>
-    <section class="wn-debug-section">
-        <h4>Current notes</h4>
+    <section class="wn-debug-section wn-debug-fold-section">
+        <button type="button" class="wn-debug-fold" aria-expanded="true" aria-controls="wn-debug-notes">
+            <span class="wn-debug-fold-mark" aria-hidden="true"></span>
+            Current Notes
+        </button>
         <div id="wn-debug-notes" class="wn-debug-notes"></div>
     </section>
-    <section class="wn-debug-section">
-        <h4>Injected context</h4>
+    <section class="wn-debug-section wn-debug-fold-section">
+        <button type="button" class="wn-debug-fold" aria-expanded="true" aria-controls="wn-debug-inject">
+            <span class="wn-debug-fold-mark" aria-hidden="true"></span>
+            Injected Context
+        </button>
         <pre id="wn-debug-inject" class="wn-debug-inject"></pre>
     </section>
     <section class="wn-debug-section wn-debug-log-section">
-        <h4>Update log</h4>
+        <h4>Update Log</h4>
         <div id="wn-debug-log" class="wn-debug-log"></div>
     </section>
 </div>

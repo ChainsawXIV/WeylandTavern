@@ -1,0 +1,13 @@
+{
+    "display_name": "Weyland Notes",
+    "loading_order": 150,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Weyland",
+    "version": "1.0.0",
+    "homePage": "",
+    "auto_update": false,
+    "description": "Persistent scenario notes as function tools, stored on each chat message and injected as canon overrides."
+}

@@ -1,0 +1,49 @@
+.weyland-notes-hint {
+    opacity: 0.8;
+    font-size: 0.9em;
+    margin: 8px 0;
+}
+
+.weyland-notes-warn {
+    margin: 8px 0;
+    padding: 6px 8px;
+    border-left: 3px solid var(--warning, #c9a227);
+    opacity: 0.95;
+    font-size: 0.9em;
+}
+
+.weyland-notes-list-header {
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.weyland-notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 8px;
+}
+
+.weyland-notes-empty {
+    opacity: 0.6;
+    font-style: italic;
+}
+
+.weyland-notes-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.weyland-notes-row-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.weyland-notes-row-id {
+    display: block;
+    opacity: 0.55;
+    font-size: 0.8em;
+}

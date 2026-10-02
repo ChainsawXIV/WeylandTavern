@@ -2695,7 +2695,7 @@
         "inline_image_quality": "low",
         "bypass_status_check": false,
         "continue_prefill": false,
-        "function_calling": false,
+        "function_calling": true,
         "names_behavior": 0,
         "continue_postfix": " ",
         "custom_prompt_post_processing": "strict",

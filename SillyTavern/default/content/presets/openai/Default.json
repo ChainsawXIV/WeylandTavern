@@ -234,6 +234,7 @@
     "bypass_status_check": false,
     "continue_prefill": false,
     "continue_postfix": " ",
+    "function_calling": true,
     "seed": -1,
     "n": 1
 }

@@ -23,6 +23,7 @@ import {
     summarizeNotes,
     writeNotes,
 } from './store.js';
+import { initDebugPanel, logDebug, refreshDebug, setDebugPanelOpen } from './debugPanel.js';
 
 export {
     applyNoteOp,
@@ -51,9 +52,9 @@ const {
     ARGUMENT_TYPE,
 } = getContext();
 
-const defaults = { enabled: true };
+const defaults = { enabled: true, debugPanel: false };
 
-/** @type {{ enabled: boolean }} */
+/** @type {{ enabled: boolean, debugPanel: boolean }} */
 let settings = defaults;
 
 /** In-flight generation snapshot. Survives tool-call recursion; cleared when gen ends. */
@@ -76,13 +77,14 @@ export function getActiveNotes() {
     return session ? cloneNotes(session.notes) : latestNotes(ctx().chat);
 }
 
-function injectPrompt() {
+function injectPrompt(reason = '') {
     const { setExtensionPrompt, isToolCallingSupported } = ctx();
     const enabled = getSettings().enabled;
     const value = enabled ? formatNotesPrompt(getActiveNotes()) : '';
     setExtensionPrompt(PROMPT_KEY, value, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.SYSTEM);
     updateToolsWarn(!enabled || isToolCallingSupported?.());
     renderNotesList();
+    refreshDebug(reason);
 }
 
 function stamp(mes, notes = getActiveNotes()) {
@@ -125,6 +127,8 @@ function runOp(op, { persist = true } = {}) {
         if (persist && !session) ctx().saveChat?.();
         emitChange(result.notes, op.action);
     }
+    logDebug(result.ok ? (op.action || 'update') : 'skip', result.message);
+    if (!result.ok) refreshDebug();
     return {
         ...result,
         notes: summarizeNotes(result.ok ? result.notes : current),
@@ -258,6 +262,12 @@ async function addSettings() {
         registerTool();
         injectPrompt();
     });
+    $('#weyland-notes-debug-toggle').prop('checked', s.debugPanel).on('input', function () {
+        s.debugPanel = !!$(this).prop('checked');
+        saveSettingsDebounced();
+        setDebugPanelOpen(s.debugPanel);
+        refreshDebug();
+    });
     renderNotesList();
     updateToolsWarn(!s.enabled || ctx().isToolCallingSupported?.());
 }
@@ -266,7 +276,7 @@ function bindEvents() {
     eventSource.on(event_types.GENERATION_STARTED, (type, _opts, dryRun) => {
         if (dryRun || SKIP_GEN.has(type) || !getSettings().enabled) return;
         beginSession(type);
-        injectPrompt();
+        injectPrompt(type === 'swipe' || type === 'regenerate' ? 'reroll' : '');
     });
 
     eventSource.on(event_types.GENERATION_ENDED, endSession);
@@ -292,20 +302,29 @@ function bindEvents() {
     // a new swipe emits MESSAGE_SWIPED, before Generate() actually starts.
     eventSource.on(event_types.CHAT_CHANGED, () => {
         session = null;
-        injectPrompt();
+        injectPrompt('chat');
     });
-    eventSource.on(event_types.MESSAGE_SWIPED, () => { if (!session) injectPrompt(); });
-    eventSource.on(event_types.MESSAGE_DELETED, () => { if (!session) injectPrompt(); });
+    eventSource.on(event_types.MESSAGE_SWIPED, () => { if (!session) injectPrompt('swipe'); });
+    eventSource.on(event_types.MESSAGE_DELETED, () => { if (!session) injectPrompt('delete'); });
     eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, injectPrompt);
 }
 
 jQuery(async () => {
     getSettings();
+    initDebugPanel({
+        getNotes: getActiveNotes,
+        notesEnabled: () => getSettings().enabled,
+        panelEnabled: () => getSettings().debugPanel,
+        inSession: () => !!session,
+    });
+    const debugHtml = await renderExtensionTemplateAsync(MODULE, 'debug');
+    document.body.insertAdjacentHTML('beforeend', debugHtml);
     registerTool();
     registerSlash();
     ctx().registerMacro?.('scenarioNotes', () => formatNotesPrompt(getActiveNotes(), { guide: false }));
     await addSettings();
     bindEvents();
+    setDebugPanelOpen(getSettings().debugPanel);
     injectPrompt();
     console.log(`[${MODULE}] ready`);
 });

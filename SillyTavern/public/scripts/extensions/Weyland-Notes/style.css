@@ -47,3 +47,150 @@
     opacity: 0.55;
     font-size: 0.8em;
 }
+
+/* Debug panel — left gutter beside #sheld (desktop) */
+.weyland-notes-debug {
+    display: none;
+    position: fixed;
+    left: 8px;
+    top: calc(var(--topBarBlockSize) + 8px);
+    bottom: 8px;
+    width: calc((100dvw - var(--sheldWidth)) / 2 - 16px);
+    max-width: 420px;
+    z-index: 25;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background-color: var(--SmartThemeBlurTintColor);
+    backdrop-filter: blur(var(--SmartThemeBlurStrength));
+    -webkit-backdrop-filter: blur(var(--SmartThemeBlurStrength));
+    box-shadow: 0 0 10px var(--black70a);
+    color: var(--SmartThemeBodyColor);
+}
+
+body.wn-debug-open .weyland-notes-debug {
+    display: flex;
+}
+
+.wn-debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.wn-debug-status {
+    margin-left: 6px;
+    opacity: 0.55;
+    font-size: 0.8em;
+    font-weight: 400;
+}
+
+.wn-debug-count {
+    opacity: 0.7;
+    font-size: 0.85em;
+}
+
+.wn-debug-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 0 1 auto;
+}
+
+.wn-debug-section h4 {
+    margin: 0 0 4px;
+    font-size: 0.8em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.wn-debug-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    max-height: 30%;
+}
+
+.wn-debug-note {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.wn-debug-note-id {
+    opacity: 0.5;
+    font-size: 0.75em;
+}
+
+.wn-debug-inject {
+    margin: 0;
+    padding: 8px;
+    max-height: 28%;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.85em;
+    line-height: 1.35;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
+.wn-debug-log-section {
+    flex: 1 1 auto;
+}
+
+.wn-debug-log {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    min-height: 0;
+    flex: 1;
+}
+
+.wn-debug-log-row {
+    display: grid;
+    grid-template-columns: 4.6em 5.2em 1fr;
+    gap: 6px;
+    align-items: start;
+    font-size: 0.8em;
+    padding: 3px 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.wn-debug-log-at {
+    opacity: 0.5;
+    font-variant-numeric: tabular-nums;
+}
+
+.wn-debug-log-kind {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+.wn-debug-log-row[data-kind="add"] .wn-debug-log-kind { color: #7dcea0; }
+.wn-debug-log-row[data-kind="update"] .wn-debug-log-kind { color: #f4d03f; }
+.wn-debug-log-row[data-kind="remove"] .wn-debug-log-kind { color: #f1948a; }
+.wn-debug-log-row[data-kind="skip"] .wn-debug-log-kind { opacity: 0.55; }
+.wn-debug-log-text { min-width: 0; word-break: break-word; }
+
+@media screen and (max-width: 1000px) {
+    body.wn-debug-open .weyland-notes-debug {
+        display: none !important;
+    }
+}
+
+body.waifuMode.wn-debug-open .weyland-notes-debug {
+    display: none !important;
+}

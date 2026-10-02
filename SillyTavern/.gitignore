@@ -25,6 +25,7 @@ public/stats.json
 *.ignore*
 /config.conf
 /config.yaml
+!/config.yaml
 /config.conf.bak
 /docker/config
 /docker/user
@@ -50,7 +51,9 @@ access.log
 /cache/
 public/css/user.css
 public/error/
-/plugins/
+/plugins/*
+!/plugins/SillyTavern-MCP-Server/
+!/plugins/SillyTavern-MCP-Server/**
 /data/*
 !/data/default-user
 /data/default-user/assets

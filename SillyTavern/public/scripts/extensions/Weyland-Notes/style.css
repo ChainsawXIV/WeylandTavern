@@ -1,17 +1,3 @@
-.weyland-notes-hint {
-    opacity: 0.8;
-    font-size: 0.9em;
-    margin: 8px 0;
-}
-
-.weyland-notes-warn {
-    margin: 8px 0;
-    padding: 6px 8px;
-    border-left: 3px solid var(--warning, #c9a227);
-    opacity: 0.95;
-    font-size: 0.9em;
-}
-
 .weyland-notes-list-header {
     font-weight: 600;
     margin-top: 6px;

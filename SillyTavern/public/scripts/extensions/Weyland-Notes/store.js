@@ -133,34 +133,18 @@ export function applyNoteOp(notes, { action, id, text } = {}) {
     return { notes: list, ok: true, message: `Added: ${noteId} — ${trimmed}` };
 }
 
-const XML_TAG = /<scenario_note\b([^>]*)>([\s\S]*?)<\/scenario_note>/gi;
 const LINE_TAG = /^[ \t]*\[WN\s+(add|update|remove)\s+([^\]]+?)\][ \t]*(.*?)[ \t]*$/gim;
 const INLINE_TAG = /\[WN\s+(add|update|remove)\s+([^\]]+?)\][ \t]*([^\n]*)/gi;
 
-function attrs(raw) {
-    const out = {};
-    const re = /(\w+)\s*=\s*["']([^"']*)["']/g;
-    let m;
-    while ((m = re.exec(raw || ''))) out[m[1].toLowerCase()] = m[2];
-    return out;
-}
-
 /**
- * Pull note ops out of model text. HelixMind often drops native tools, so the
- * prompt asks for [WN] / <scenario_note> tags in the same reply as the RP.
+ * Pull [WN] note ops out of model text and return the reply with those tags removed.
  * @returns {{ ops: {action: string, id: string, text: string}[], text: string }}
  */
 export function parseNoteTags(text) {
     const src = String(text || '');
     const ops = [];
-    XML_TAG.lastIndex = 0;
     LINE_TAG.lastIndex = 0;
-    let next = src.replace(XML_TAG, (_, raw, body) => {
-        const a = attrs(raw);
-        ops.push({ action: a.action || 'add', id: a.id, text: String(body || '').trim() });
-        return '';
-    });
-    next = next.replace(LINE_TAG, (_, action, id, body) => {
+    let next = src.replace(LINE_TAG, (_, action, id, body) => {
         ops.push({ action, id: String(id).trim(), text: String(body || '').trim() });
         return '';
     });
@@ -194,11 +178,6 @@ export function formatNotesPrompt(notes, { guide = true } = {}) {
     }
     if (guide) lines.push(GUIDE);
     return lines.join('\n');
-}
-
-export function summarizeNotes(notes) {
-    const list = cloneNotes(notes);
-    return list.length ? list.map(n => `${n.id}: ${n.text}`).join('\n') : '(none)';
 }
 
 /** Listeners: (notes, reason) => void. Future features can subscribe without editing the glue. */

@@ -1,9 +1,8 @@
 /**
- * Weyland Notes — lasting canon updates as function tools.
+ * Weyland Notes — lasting canon updates recorded from the reply.
  *
- * Native ToolManager (not an out-of-process MCP server) so snapshots can live
- * on chat messages and survive swipes, rerolls, branches, and chat switches.
- * store.js is the extension point for later note types / features.
+ * Snapshots live on chat messages and survive swipes, rerolls, branches,
+ * and chat switches. store.js is the extension point for later note types.
  */
 
 import {
@@ -21,8 +20,6 @@ import {
     formatNotesPrompt,
     latestNotes,
     parseNoteTags,
-    readNotes,
-    summarizeNotes,
     writeNotes,
 } from './store.js';
 import { initDebugPanel, logDebug, refreshDebug, setDebugPanelOpen } from './debugPanel.js';
@@ -36,23 +33,16 @@ export {
     latestNotes,
     parseNoteTags,
     readNotes,
-    summarizeNotes,
     writeNotes,
 } from './store.js';
 
 const MODULE = 'Weyland-Notes';
 const PROMPT_KEY = 'Weyland-Notes';
-const TOOL_NAME = 'scenario_note';
 const SKIP_GEN = new Set(['quiet', 'impersonate']);
 
 const {
     extensionSettings,
     renderExtensionTemplateAsync,
-    SlashCommandParser,
-    SlashCommand,
-    SlashCommandArgument,
-    SlashCommandNamedArgument,
-    ARGUMENT_TYPE,
 } = getContext();
 
 const defaults = { enabled: true, debugPanel: false };
@@ -60,7 +50,7 @@ const defaults = { enabled: true, debugPanel: false };
 /** @type {{ enabled: boolean, debugPanel: boolean }} */
 let settings = defaults;
 
-/** In-flight generation snapshot. Survives tool-call recursion; cleared when gen ends. */
+/** In-flight generation snapshot. Cleared when generation ends. */
 /** @type {{ notes: import('./store.js').ScenarioNote[] } | null} */
 let session = null;
 
@@ -87,7 +77,6 @@ function injectPrompt(reason = '') {
     // User role, not system: this preset ends on Claude via a custom proxy, which drops
     // a trailing system turn. Depth 0 keeps the guide as the last message before the reply.
     setExtensionPrompt(PROMPT_KEY, value, extension_prompt_types.IN_CHAT, 0, false, extension_prompt_roles.USER);
-    updateToolsWarn();
     renderNotesList();
     refreshDebug(reason);
 }
@@ -128,7 +117,7 @@ function applyToMessage(mes, text) {
     }
 }
 
-/** HelixMind frequently swallows native tools; harvest in-message [WN] / XML tags. */
+/** Harvest in-message [WN] tags before other extensions read the reply. */
 function harvestMessage(id) {
     if (!getSettings().enabled) return;
     const chat = ctx().chat;
@@ -167,74 +156,7 @@ function runOp(op, { persist = true } = {}) {
     }
     logDebug(result.ok ? (op.action || 'update') : 'skip', result.message);
     if (!result.ok) refreshDebug();
-    return {
-        ...result,
-        notes: summarizeNotes(result.ok ? result.notes : current),
-    };
-}
-
-function isOurToolMessage(mes) {
-    const inv = mes?.extra?.tool_invocations;
-    return !!(mes?.is_system && Array.isArray(inv) && inv.length && inv.every(i => i?.name === TOOL_NAME));
-}
-
-/** Native tool calls steal the RP turn on HelixMind. Tags on the reply are the recording path. */
-function registerTool() {
-    ctx().unregisterFunctionTool?.(TOOL_NAME);
-}
-
-/** Drop leftover Scenario Note system bubbles; keep the snapshot on the previous message. */
-async function retractToolBubbles() {
-    const chat = ctx().chat;
-    if (!Array.isArray(chat) || !chat.length) return;
-    let removed = false;
-    while (chat.length && isOurToolMessage(chat[chat.length - 1])) {
-        const notes = readNotes(chat[chat.length - 1]) || getActiveNotes();
-        const prev = chat[chat.length - 2];
-        if (prev) stamp(prev, notes);
-        await ctx().deleteLastMessage?.();
-        removed = true;
-    }
-    if (removed) {
-        logDebug('tools', 'Removed tool-call bubble');
-        injectPrompt();
-        ctx().saveChat?.();
-    }
-}
-
-function registerSlash() {
-    SlashCommandParser.addCommandObject(SlashCommand.fromProps({
-        name: 'scenote',
-        aliases: ['snote', 'canonnote'],
-        helpString: 'Add, update, remove, or list scenario notes. Example: <code>/scenote action=add id=maya-hair Maya has a pixie cut</code>',
-        returns: 'Result of the note operation',
-        namedArgumentList: [
-            SlashCommandNamedArgument.fromProps({
-                name: 'action',
-                description: 'add, update, remove, or list',
-                typeList: [ARGUMENT_TYPE.STRING],
-                enumList: ['add', 'update', 'remove', 'list'],
-                defaultValue: 'list',
-            }),
-            SlashCommandNamedArgument.fromProps({
-                name: 'id',
-                description: 'Stable note id',
-                typeList: [ARGUMENT_TYPE.STRING],
-            }),
-        ],
-        unnamedArgumentList: [
-            SlashCommandArgument.fromProps({
-                description: 'Note text (add/update)',
-                typeList: [ARGUMENT_TYPE.STRING],
-            }),
-        ],
-        callback: async (args, unnamed) => {
-            const action = String(args?.action || 'list').toLowerCase();
-            if (action === 'list' || (!args?.id && !unnamed)) return summarizeNotes(getActiveNotes());
-            const result = runOp({ action, id: args?.id, text: String(unnamed || '') });
-            return result.message;
-        },
-    }));
+    return result;
 }
 
 function esc(s) {
@@ -263,11 +185,6 @@ function renderNotesList() {
     });
 }
 
-function updateToolsWarn() {
-    const el = document.getElementById('weyland-notes-tools-warn');
-    if (el) el.hidden = true;
-}
-
 async function addSettings() {
     const html = await renderExtensionTemplateAsync(MODULE, 'settings');
     const target = document.getElementById('extensions_settings2') || document.getElementById('extensions_settings');
@@ -277,7 +194,6 @@ async function addSettings() {
     $('#weyland-notes-enabled').prop('checked', s.enabled).on('input', function () {
         s.enabled = !!$(this).prop('checked');
         saveSettingsDebounced();
-        registerTool();
         injectPrompt();
     });
     $('#weyland-notes-debug-toggle').prop('checked', s.debugPanel).on('input', function () {
@@ -287,7 +203,6 @@ async function addSettings() {
         refreshDebug();
     });
     renderNotesList();
-    updateToolsWarn();
 }
 
 function bindEvents() {
@@ -314,23 +229,14 @@ function bindEvents() {
     eventSource.makeFirst(event_types.MESSAGE_UPDATED, harvestMessage);
     eventSource.on(event_types.MESSAGE_EDITED, harvestMessage);
 
-    eventSource.on(event_types.TOOL_CALLS_RENDERED, () => retractToolBubbles());
-
     // Don't drop an in-flight snapshot: regenerate deletes the last message, and
     // a new swipe emits MESSAGE_SWIPED, before Generate() actually starts.
-    eventSource.on(event_types.CHAT_CHANGED, async () => {
+    eventSource.on(event_types.CHAT_CHANGED, () => {
         session = null;
-        await retractToolBubbles();
         injectPrompt('chat');
     });
     eventSource.on(event_types.MESSAGE_SWIPED, () => { if (!session) injectPrompt('swipe'); });
     eventSource.on(event_types.MESSAGE_DELETED, () => { if (!session) injectPrompt('delete'); });
-    eventSource.on(event_types.CHAT_COMPLETION_SETTINGS_READY, (data) => {
-        const n = Array.isArray(data?.tools) ? data.tools.length : 0;
-        const names = n ? data.tools.map(t => t?.function?.name || t?.name).filter(Boolean).join(', ') : '';
-        logDebug('tools', n ? `${n} on request (${names})` : 'none on request — tags still work');
-        injectPrompt();
-    });
 }
 
 jQuery(async () => {
@@ -343,13 +249,10 @@ jQuery(async () => {
     });
     const debugHtml = await renderExtensionTemplateAsync(MODULE, 'debug');
     document.body.insertAdjacentHTML('beforeend', debugHtml);
-    registerTool();
-    registerSlash();
     ctx().registerMacro?.('scenarioNotes', () => formatNotesPrompt(getActiveNotes(), { guide: false }));
     await addSettings();
     bindEvents();
     setDebugPanelOpen(getSettings().debugPanel);
     injectPrompt();
-    await retractToolBubbles();
     console.log(`[${MODULE}] ready`);
 });

@@ -1,5 +1,5 @@
 import { getTokenCountAsync } from '../../tokenizers.js';
-import { formatNotesPrompt } from './store.js';
+import { notesPromptParts } from './store.js';
 
 const MAX_LOG = 80;
 
@@ -36,23 +36,46 @@ function panel() {
     return document.getElementById('weyland-notes-debug');
 }
 
-/** Injected prompt text. Empty when notes are disabled. */
-function promptText(notes, enabled) {
-    return enabled ? (formatNotesPrompt(notes) || '') : '';
+/** Injected prompt split into instructions and the notes block. Empty when notes are disabled. */
+function promptParts(notes, enabled) {
+    if (!enabled) return { full: '', instructions: '', notes: '' };
+    return notesPromptParts(notes);
 }
 
 function formatTokenCount(n) {
     return n === 1 ? '1 token' : `${n} tokens`;
 }
 
+function formatTokenBreakdown(total, instructions, notes, approx) {
+    const head = `${approx ? '~' : ''}${formatTokenCount(total)}`;
+    const instrLabel = instructions === 1 ? 'instruction' : 'instructions';
+    const notesLabel = notes === 1 ? 'note' : 'notes';
+    return `${head} (${instructions} ${instrLabel}, ${notes} ${notesLabel})`;
+}
+
+/** Scale independent piece counts so the parenthetical adds up to the injected total. */
+function reconcileCounts(total, instructionCount, noteCount) {
+    if (total <= 0) return { instructions: 0, notes: 0 };
+    if (noteCount <= 0) return { instructions: total, notes: 0 };
+    if (instructionCount <= 0) return { instructions: 0, notes: total };
+    const sum = instructionCount + noteCount;
+    const instructions = Math.round((total * instructionCount) / sum);
+    return { instructions, notes: total - instructions };
+}
+
+function estimateTokens(text) {
+    return text ? Math.ceil(text.length / 4) : 0;
+}
+
 let tokenSeq = 0;
 /** Last prompt string whose count is currently shown, so refreshes don't flicker. */
 let shownPrompt = null;
 
-async function updateTokenCount(text) {
+async function updateTokenCount(parts) {
     const el = document.getElementById('wn-debug-tokens');
     if (!el) return;
     const seq = ++tokenSeq;
+    const text = parts.full;
     if (!text) {
         shownPrompt = '';
         el.textContent = '0 tokens';
@@ -60,14 +83,21 @@ async function updateTokenCount(text) {
     }
     if (shownPrompt !== text) el.textContent = '…';
     try {
-        const count = await getTokenCountAsync(text);
+        const [total, instructionCount, noteCount] = await Promise.all([
+            getTokenCountAsync(text),
+            parts.instructions ? getTokenCountAsync(parts.instructions) : 0,
+            parts.notes ? getTokenCountAsync(parts.notes) : 0,
+        ]);
         if (seq !== tokenSeq) return;
         shownPrompt = text;
-        el.textContent = formatTokenCount(count);
+        const split = reconcileCounts(total, instructionCount, noteCount);
+        el.textContent = formatTokenBreakdown(total, split.instructions, split.notes, false);
     } catch {
         if (seq !== tokenSeq) return;
         shownPrompt = text;
-        el.textContent = `~${Math.ceil(text.length / 4)} tokens`;
+        const total = estimateTokens(text);
+        const split = reconcileCounts(total, estimateTokens(parts.instructions), estimateTokens(parts.notes));
+        el.textContent = formatTokenBreakdown(total, split.instructions, split.notes, true);
     }
 }
 
@@ -121,14 +151,14 @@ function render() {
             : '<div class="weyland-notes-empty">No notes on this branch.</div>';
     }
 
-    const prompt = promptText(notes, enabled);
+    const parts = promptParts(notes, enabled);
     const inject = document.getElementById('wn-debug-inject');
     if (inject) {
         inject.textContent = !enabled
             ? '(notes disabled — nothing injected)'
-            : (prompt || '(empty)');
+            : (parts.full || '(empty)');
     }
-    void updateTokenCount(prompt);
+    void updateTokenCount(parts);
 
     const logEl = document.getElementById('wn-debug-log');
     if (logEl) {

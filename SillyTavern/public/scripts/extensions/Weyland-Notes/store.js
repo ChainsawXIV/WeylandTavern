@@ -183,6 +183,20 @@ export function formatNotesPrompt(notes, { guide = true } = {}) {
     return lines.join('\n') + '\n';
 }
 
+/**
+ * Injected prompt split into the instruction guide and the canon-state notes block.
+ * `notes + instructions` equals `formatNotesPrompt(notes)`. With no notes, `notes` is empty.
+ */
+export function notesPromptParts(notes) {
+    const full = formatNotesPrompt(notes);
+    if (!cloneNotes(notes).length) return { full, instructions: full, notes: '' };
+    const notesText = formatNotesPrompt(notes, { guide: false });
+    if (notesText && full.startsWith(notesText)) {
+        return { full, instructions: full.slice(notesText.length), notes: notesText };
+    }
+    return { full, instructions: full, notes: '' };
+}
+
 /** Listeners: (notes, reason) => void. Future features can subscribe without editing the glue. */
 export const hooks = {
     onChange: [],

@@ -162,11 +162,14 @@ const GUIDE = [
     '- The state will be relevant often and should always be in context.',
     '- The state deviates from the baseline in lorebooks and other context.',
     '- The state will stay relevant over the long term, even if it changes.',
-    'Note only facts about characters or the world, without any additional context, reasoning, or events, and keep each description to a few words.',
-    '`[WN update id] revised state` updates an existing note. Prefer to do this if a relevant note already exists.',
-    '`[WN add id] state` adds a new note.',
-    '`[WN remove id]` removes a note. Do this if a note is no longer relevant.',
-    'If the state has not changed, make no further note of it.',
+    'Note only important facts which change the characters or the world, and only the facts themselves! No context, reasoning, events, trivia, or details!',
+    'You may describe the results of actions if they create such a change, but never note actions themselves, who took them, or how they happened.',
+    'Limit each description to a few words, and use a short hyphenated phrase like "house-burned-down" for the id.',
+    'Use "[WN update id] revised state" to update an existing note. Do not add new notes if updating makes more sense. Update each note only once.',
+    'Use "[WN add id] state" to add an entirely new note. Only add new notes if they meet the criteria above.',
+    'Use "[WN remove id]" to remove a note. Remove notes immediately when the story no longer matches their details!',
+    'If a note id no longer makes sense but its content still matters, remove it and create a better named replacement in the same message.',
+//    'If the state of an existing note has not changed, do not waste tokens updating it.',
 ].join('\n');
 
 export function formatNotesPrompt(notes, { guide = true } = {}) {
@@ -177,7 +180,7 @@ export function formatNotesPrompt(notes, { guide = true } = {}) {
         for (const n of list) lines.push(`- ${n.id}: ${n.text}`);
     }
     if (guide) lines.push(GUIDE);
-    return lines.join('\n');
+    return lines.join('\n') + '\n';
 }
 
 /** Listeners: (notes, reason) => void. Future features can subscribe without editing the glue. */
